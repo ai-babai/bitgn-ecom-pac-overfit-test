@@ -2,9 +2,9 @@
 
 [Русский](README.ru.md)
 
-`bitgn-ecom-run` is a code-only BitGN runner for ECOM/PAC1. This branch moves the
-orchestration to one language: Python. Tasks are solved by deterministic
-algorithms, with no LLM calls and no Rust wrapper.
+`bitgn-ecom-run` is a code-only BitGN runner for ECOM/PAC1. The main version is
+now Python-only: tasks are solved by deterministic algorithms, with no LLM calls
+and no Rust wrapper.
 
 ## Installation
 
@@ -29,55 +29,35 @@ ECOM dev:
 
 ```bash
 TASKS=$(printf 't%02d,' $(seq 1 44)); TASKS=${TASKS%,}
-uv run python -m bitgn_run.cli run \
-  --env ecom \
-  --run-id ecom-dev-local \
-  --leaderboard false \
-  --fail-fast false \
-  --workers 10 \
-  --tasks "$TASKS" \
-  --artifact-dir runs
+uv run python -m bitgn_run.cli run   --env ecom   --run-id ecom-dev-local   --leaderboard false   --fail-fast false   --workers 10   --tasks "$TASKS"   --artifact-dir runs
 ```
 
 PAC1 dev:
 
 ```bash
 TASKS=$(printf 't%02d,' $(seq 1 43)); TASKS=${TASKS%,}
-uv run python -m bitgn_run.cli run \
-  --env pac1 \
-  --run-id pac1-dev-local \
-  --leaderboard false \
-  --fail-fast false \
-  --workers 10 \
-  --tasks "$TASKS" \
-  --artifact-dir runs
+uv run python -m bitgn_run.cli run   --env pac1   --run-id pac1-dev-local   --leaderboard false   --fail-fast false   --workers 10   --tasks "$TASKS"   --artifact-dir runs
 ```
 
 PAC1 prod blind:
 
 ```bash
 TASKS=$(printf 't%03d,' $(seq 0 103)); TASKS=${TASKS%,}
-uv run python -m bitgn_run.cli run \
-  --env pac1-prod \
-  --run-id pac1-prod-blind-local \
-  --leaderboard false \
-  --fail-fast false \
-  --workers 10 \
-  --tasks "$TASKS" \
-  --artifact-dir runs
+uv run python -m bitgn_run.cli run   --env pac1-prod   --run-id pac1-prod-blind-local   --leaderboard false   --fail-fast false   --workers 10   --tasks "$TASKS"   --artifact-dir runs
 ```
 
-## DEV Measurements Without Leaderboard
+## Python-Only Results
 
-| Benchmark | Runner | Run id | Tasks | Result | Workers | Leaderboard | Wall sum |
+| Benchmark | Env | Run id | Tasks | Result | Workers | Leaderboard | Wall sum |
 | --- | --- | --- | ---: | ---: | ---: | --- | ---: |
-| `ecom1_dev` | Rust wrapper baseline | `decouple-ecom-dev-002` | 44 | `44/44` | 10 | no local, yes artifact | `48.020s` |
-| `ecom1_dev` | Python-only | `python-only-ecom-dev-001` | 44 | `44/44` | 10 | no | `49.344s` |
-| `pac1_dev` | Rust wrapper baseline | `decouple-pac1-dev-001` | 43 | `43/43` | 10 | no local, yes artifact | `89.142s` |
-| `pac1_dev` | Python-only | `python-only-pac1-dev-001` | 43 | `43/43` | 10 | no | `89.099s` |
+| `ecom1_dev` | dev | `python-only-ecom-dev-001` | 44 | `44/44` | 10 | yes | `49.344s` |
+| `pac1_dev` | dev | `python-only-pac1-dev-001` | 43 | `43/43` | 10 | yes | `89.099s` |
+| `pac1_prod` | prod blind | `python-only-pac1-prod-001` | 104 | `20/104` | 10 | no | `92.760s` |
 
-Result: Python-only preserves quality. PAC1 speed is effectively unchanged and
-slightly faster by task wall sum; ECOM is about `1.324s` slower by task wall sum.
+For dev rows, `Leaderboard=yes` means this benchmark has a leaderboard artifact.
+The listed `Run id` and `Wall sum` are from the latest local Python-only
+verification runs without submission. `pac1_prod` is a blind run without
+leaderboard.
 
 ## Python-Only Timing Snapshot
 
@@ -85,6 +65,7 @@ slightly faster by task wall sum; ECOM is about `1.324s` slower by task wall sum
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | `ecom1_dev` | `python-only-ecom-dev-001` | 44 | 10 | `49.344s` | `1.121s` | `0.658s` | `1.406s` | `34.340s` | `12.734s` | `19.171s` | `2.435s` | `15.004s` |
 | `pac1_dev` | `python-only-pac1-dev-001` | 43 | 10 | `89.099s` | `2.072s` | `1.498s` | `4.743s` | `85.664s` | `77.458s` | `3.903s` | `4.303s` | `3.435s` |
+| `pac1_prod` | `python-only-pac1-prod-001` | 104 | 10 | `92.760s` | `0.892s` | `0.526s` | `1.675s` | `84.788s` | `74.088s` | `0.000s` | `10.700s` | `7.972s` |
 
 ## Architecture
 

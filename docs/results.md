@@ -1,20 +1,16 @@
 # Benchmark Results
 
-Latest measurements for the Python-only runner branch. All rows below are local
-DEV verification runs without leaderboard submission.
+Latest measurements for the Python-only runner. Dev rows have corresponding
+leaderboard artifacts; the run ids below are local verification runs without
+submission.
 
-## Python-Only vs Rust Wrapper Baseline
+## Python-Only Results
 
-| Benchmark | Runner | Run id | Tasks | Result | Workers | Leaderboard | Wall sum |
+| Benchmark | Env | Run id | Tasks | Result | Workers | Leaderboard | Wall sum |
 | --- | --- | --- | ---: | ---: | ---: | --- | ---: |
-| `ecom1_dev` | Rust wrapper baseline | `decouple-ecom-dev-002` | 44 | `44/44` | 10 | no local, yes artifact | `48.020s` |
-| `ecom1_dev` | Python-only | `python-only-ecom-dev-001` | 44 | `44/44` | 10 | no | `49.344s` |
-| `pac1_dev` | Rust wrapper baseline | `decouple-pac1-dev-001` | 43 | `43/43` | 10 | no local, yes artifact | `89.142s` |
-| `pac1_dev` | Python-only | `python-only-pac1-dev-001` | 43 | `43/43` | 10 | no | `89.099s` |
-
-Python-only keeps the same pass counts. PAC1 is effectively unchanged
-(`-0.043s` task wall sum), while ECOM is `+1.324s` slower than the Rust-wrapper
-baseline.
+| `ecom1_dev` | dev | `python-only-ecom-dev-001` | 44 | `44/44` | 10 | yes | `49.344s` |
+| `pac1_dev` | dev | `python-only-pac1-dev-001` | 43 | `43/43` | 10 | yes | `89.099s` |
+| `pac1_prod` | prod blind | `python-only-pac1-prod-001` | 104 | `20/104` | 10 | no | `92.760s` |
 
 ## Timing Snapshot
 
@@ -26,6 +22,7 @@ artifact I/O, trial close, and scoring.
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | `ecom1_dev` | `python-only-ecom-dev-001` | 44 | 10 | `49.344s` | `1.121s` | `0.658s` | `1.406s` | `34.340s` | `12.734s` | `19.171s` | `2.435s` | `15.004s` |
 | `pac1_dev` | `python-only-pac1-dev-001` | 43 | 10 | `89.099s` | `2.072s` | `1.498s` | `4.743s` | `85.664s` | `77.458s` | `3.903s` | `4.303s` | `3.435s` |
+| `pac1_prod` | `python-only-pac1-prod-001` | 104 | 10 | `92.760s` | `0.892s` | `0.526s` | `1.675s` | `84.788s` | `74.088s` | `0.000s` | `10.700s` | `7.972s` |
 
 Notes:
 
