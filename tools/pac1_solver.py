@@ -273,12 +273,14 @@ class Pac1DeterministicSolver:
         refs = ["docs/purchase-id-workflow.md", "docs/purchase-records.md"]
         for ref in refs:
             self.read(ref)
+        samples = [p for p in self.find_files("purchases") if p.endswith(".json")][:8]
         prefixes = []
-        for path, data in self.records("purchases"):
+        for sample in samples:
+            data = self.read_json(sample)
             pid = str(data.get("purchase_id") or "")
             if "-" in pid:
                 prefixes.append(pid.split("-", 1)[0] + "-")
-                refs.append(path)
+                refs.append(sample)
         prefix = most_common(prefixes) or "prc-"
         for lane in self.find_files("processing"):
             if lane.endswith(".json"):
@@ -424,14 +426,28 @@ class Pac1DeterministicSolver:
             return self.finish("Which known contact should receive the invoice?", CLARIFY, refs)
         if requested_account and requested_account[1].get("id") != contact[1].get("account_id"):
             return self.finish("Sender is not authorized for the requested account invoice.", DENIED, refs + [contact[0], requested_account[0]])
-        account_id = contact[1].get("account_id")
-        invoices = [(p, d) for p, d in self.records("my-invoices") if d.get("account_id") == account_id]
+        account_id = str(contact[1].get("account_id") or "")
+        invoices = self.invoices_for_account(account_id)
         if not invoices:
             return self.finish("No invoice found for that account.", CLARIFY, refs + [contact[0]])
         invoices.sort(key=lambda item: str(item[1].get("issued_on", "")), reverse=True)
         invoice = invoices[0]
         result = self.send_email(str(contact[1].get("email")), "Invoice resend", "Sharing the latest invoice again.", refs + [contact[0], invoice[0]], [invoice[0]])
         return result
+
+    def invoices_for_account(self, account_id: str) -> list[tuple[str, dict[str, Any]]]:
+        match = re.search(r"(\d+)$", account_id)
+        paths = self.find_files("my-invoices")
+        if match:
+            prefix = f"my-invoices/INV-{int(match.group(1)):03d}-"
+            paths = [path for path in paths if path.startswith(prefix)]
+        rows = []
+        for path in paths:
+            if path.endswith(".json"):
+                data = self.read_json(path)
+                if data.get("account_id") == account_id:
+                    rows.append((path, data))
+        return rows
 
     def resolve_requested_invoice_account(self, msg: str) -> tuple[str, dict[str, Any]] | None:
         patterns = [

@@ -60,7 +60,7 @@ Leaderboard submit включается только явно через `--lead
 | Benchmark | Run id | Tasks | Result | Workers | Leaderboard | Wall sum |
 | --- | --- | ---: | ---: | ---: | --- | ---: |
 | ECOM dev | `main-ecom-dev-001` | 44 | `44/44` | 10 | no | `58.203s` |
-| PAC1 dev | `main-pac1-dev-003` | 43 | `43/43` | 10 | no | `170.699s` |
+| PAC1 dev | `pac1-dev-speed-003` | 43 | `43/43` | 10 | no | `141.315s` |
 | PAC1 prod blind | `pac1-prod-blind-002` | 104 | `20/104` | 10 | no | `182.606s` |
 | ECOM leaderboard | `leaderboard-shmygolet-v006-002` | 44 | `44/44` | 10 | yes | `26.412s` local, `0:23` leaderboard |
 
