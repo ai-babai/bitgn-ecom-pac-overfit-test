@@ -69,6 +69,14 @@ ECOM leaderboard name: `[@skifmax]-[code-without-llm]-[shmygolet]-[v006]`.
 PAC1 prod was a blind run over `t000..t103`; this row records that measurement,
 and later dev-stability fixes are not included in that prod score.
 
+### Important Limitation
+
+This solution is a strong code overfit to the known dev tasks, with no LLM calls
+and no general agentic reasoning loop. This is an intentional experiment: how far
+plain code and rules can go. The PAC1 contrast makes the limitation visible:
+`43/43` on PAC1 dev versus `20/104` on blind PAC1 prod. The current dev scores
+should not be read as evidence of strong transfer to unseen tasks.
+
 ## Architecture
 
 ```text
