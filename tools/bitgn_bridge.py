@@ -12,7 +12,7 @@ from types import SimpleNamespace
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
-NATIVE = ROOT / "reference" / "bitgn-ecom-localbench-env" / "codex-agent-native"
+NATIVE = Path(os.getenv("BITGN_NATIVE_PROJECT") or ROOT / "vendor" / "codex-agent-native")
 sys.path.insert(0, str(NATIVE))
 
 from bitgn.harness_connect import HarnessServiceClientSync  # type: ignore  # noqa: E402

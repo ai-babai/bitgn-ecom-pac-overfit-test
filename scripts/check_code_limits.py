@@ -24,7 +24,7 @@ def rust_files() -> list[Path]:
     return sorted(
         path
         for path in ROOT.rglob("*.rs")
-        if "reference" not in path.parts and "target" not in path.parts
+        if "vendor" not in path.parts and "target" not in path.parts
     )
 
 

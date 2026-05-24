@@ -1,5 +1,6 @@
 use crate::types::TaskResult;
 use serde_json::Value;
+use std::env;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -12,7 +13,10 @@ pub struct Bridge {
 impl Bridge {
     pub fn discover() -> Self {
         Self {
-            project: PathBuf::from("reference/bitgn-ecom-localbench-env/codex-agent-native"),
+            project: PathBuf::from(
+                env::var("BITGN_NATIVE_PROJECT")
+                    .unwrap_or_else(|_| "vendor/codex-agent-native".to_string()),
+            ),
             script: PathBuf::from("tools/bitgn_bridge.py"),
         }
     }

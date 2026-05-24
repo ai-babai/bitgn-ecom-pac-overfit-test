@@ -2,10 +2,11 @@
 
 Latest saved measurements for this repository.
 
-| Benchmark | Run id | Tasks | Result | Workers | Leaderboard | Wall sum |
-| --- | --- | ---: | ---: | ---: | --- | ---: |
-| PAC1 dev leaderboard | `pac1-leaderboard-shmygolet-v007-002` | 43 | `43/43` | 10 | yes | `140.800s` local |
-| PAC1 prod blind | `pac1-prod-blind-003` | 104 | `20/104` | 10 | no | `184.323s` |
+| Benchmark | Env | Run id | Tasks | Result | Workers | Leaderboard | Wall sum |
+| --- | --- | --- | ---: | ---: | ---: | --- | ---: |
+| `pac1_dev` | dev | `pac1-leaderboard-shmygolet-v007-002` | 43 | `43/43` | 10 | yes | `140.800s` local |
+| `ecom1_dev` | dev | `main-ecom-dev-001` | 44 | `44/44` | 10 | no | `58.203s` |
+| `pac1_prod` | prod blind | `pac1-prod-blind-003` | 104 | `20/104` | 10 | no | `184.323s` |
 
 PAC1 dev leaderboard was submitted with run name:
 `[@skifmax]-[code-without-llm]-[shmygolet]-[v007]`.

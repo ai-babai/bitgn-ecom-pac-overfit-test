@@ -1,6 +1,6 @@
 # bitgn-ecom-run
 
-[English](README.en.md) | [Main](README.md)
+[English](README.en.md)
 
 `bitgn-ecom-run` - code-only runner для BitGN ECOM/PAC1. Текущая версия решает
 задачи детерминированными алгоритмами, без вызовов LLM. Один CLI умеет
@@ -14,8 +14,7 @@
 - Rust toolchain: `cargo`, `rustc`, `rustfmt`.
 - Python 3.
 - `uv` для запуска Python bridge через изолированный project runner.
-- Локальный ignored snapshot адаптера BitGN harness:
-  `reference/bitgn-ecom-localbench-env/`.
+- Локальный BitGN native harness checkout. Если он расположен не в `vendor/codex-agent-native`, задайте `BITGN_NATIVE_PROJECT`.
 - Доступ к BitGN harness и, для leaderboard, BitGN API key.
 
 ### Быстрый старт
@@ -36,17 +35,13 @@ python3 -m py_compile tools/bitgn_bridge.py tools/pac1_solver.py
 scripts/check_code_limits.py
 ```
 
-### Локальный reference snapshot
+### BitGN native harness
 
-`reference/bitgn-ecom-localbench-env/` не хранится в git и закрыт `.gitignore`.
-Он нужен только локально как adapter/runtime bridge к BitGN harness. Если каталога
-нет, восстанови его из локального соседнего workspace, не коммить содержимое:
+Python bridge ожидает BitGN native harness в `vendor/codex-agent-native`. Если
+каталог расположен иначе, передайте путь через переменную окружения:
 
 ```bash
-mkdir -p reference
-rsync -a --delete \
-  /srv/aika-os/bitgn/code/bitgn-ecom-localbench-env/ \
-  reference/bitgn-ecom-localbench-env/
+export BITGN_NATIVE_PROJECT=/path/to/codex-agent-native
 ```
 
 ### Leaderboard credentials
@@ -57,17 +52,14 @@ Leaderboard submit включается только явно через `--lead
 
 ## Статус замеров
 
-| Benchmark | Run id | Tasks | Result | Workers | Leaderboard | Wall sum |
-| --- | --- | ---: | ---: | ---: | --- | ---: |
-| ECOM dev | `main-ecom-dev-001` | 44 | `44/44` | 10 | no | `58.203s` |
-| PAC1 dev | `pac1-dev-cache-speed-001` | 43 | `43/43` | 10 | no | `131.381s` |
-| PAC1 prod blind | `pac1-prod-blind-003` | 104 | `20/104` | 10 | no | `184.323s` |
-| ECOM leaderboard | `leaderboard-shmygolet-v006-002` | 44 | `44/44` | 10 | yes | `26.412s` local, `0:23` leaderboard |
-| PAC1 leaderboard | `pac1-leaderboard-shmygolet-v007-002` | 43 | `43/43` | 10 | yes | `140.800s` local |
+| Benchmark | Env | Run id | Tasks | Result | Workers | Leaderboard | Wall sum |
+| --- | --- | --- | ---: | ---: | ---: | --- | ---: |
+| `pac1_dev` | dev | `pac1-leaderboard-shmygolet-v007-002` | 43 | `43/43` | 10 | yes | `140.800s` local |
+| `ecom1_dev` | dev | `main-ecom-dev-001` | 44 | `44/44` | 10 | no | `58.203s` |
+| `pac1_prod` | prod blind | `pac1-prod-blind-003` | 104 | `20/104` | 10 | no | `184.323s` |
 
-ECOM leaderboard name: `[@skifmax]-[code-without-llm]-[shmygolet]-[v006]`.
-PAC1 prod был слепым прогоном по `t000..t103`; строка фиксирует результат этого
-замера, последующие dev-stability правки в него не включены.
+PAC1 dev leaderboard name: `[@skifmax]-[code-without-llm]-[shmygolet]-[v007]`.
+PAC1 prod был слепым прогоном по `t000..t103` без leaderboard submit.
 
 ### Важное ограничение
 
@@ -93,7 +85,7 @@ bitgn-ecom-run
 │   └── pac1_solver.py  # PAC1 deterministic solver
 ├── rules/             # rule selector names passed into run config
 ├── scripts/           # local quality checks
-└── reference/bitgn-ecom-localbench-env/  # ignored local harness adapter snapshot
+└── vendor/codex-agent-native/  # локальный BitGN native harness, не коммитится
 ```
 
 Основной цикл:

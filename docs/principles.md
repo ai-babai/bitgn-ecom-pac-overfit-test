@@ -27,8 +27,7 @@ unsupported with evidence.
 - Struct fields: <= 16.
 - Enum variants: <= 20.
 
-`reference/` is excluded because it is a read-only snapshot of the previous
-Python localbench project.
+`vendor/` is excluded because external harness checkouts are local runtime dependencies.
 
 ## Design Shape
 
