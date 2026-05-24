@@ -48,8 +48,6 @@ Leaderboard submit включается только явно через `--lead
 | `ecom1_dev` | dev | `decouple-ecom-dev-002` | 44 | `44/44` | 10 | yes | `48.020s` local; `0:23` leaderboard |
 | `pac1_prod` | prod blind | `pac1-prod-blind-003` | 104 | `20/104` | 10 | no | `184.323s` |
 
-PAC1 dev latest verification is local-only. Previous leaderboard name: `[@skifmax]-[code-without-llm]-[shmygolet]-[v007]`.
-ECOM dev leaderboard name: `[@skifmax]-[code-without-llm]-[shmygolet]-[v006]`.
 PAC1 prod был слепым прогоном по `t000..t103` без leaderboard submit.
 
 ### Важное ограничение
@@ -146,7 +144,7 @@ cargo run -- run \
 ## Проверки
 
 ```bash
-python3 -m py_compile tools/bitgn_bridge.py tools/pac1_solver.py
+uv run python -m py_compile tools/bitgn_bridge.py tools/bitgn_runtime.py tools/pac1_solver.py
 cargo fmt -- --check
 cargo test
 scripts/check_code_limits.py

@@ -4,7 +4,6 @@ target/
 runs/
 logs/
 tmp/
-vendor/
 __pycache__/
 .pytest_cache/
 .mypy_cache/

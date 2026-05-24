@@ -241,7 +241,7 @@ class BitgnAdapter:
         (initial / "TASK_INSTRUCTION.md").write_text(instruction.strip() + "\n", encoding="utf-8")
         workspace.append_jsonl(
             workspace.events_path,
-            {"event": "workspace_hydrated", "ts": now(), "source": "native_bitgn_runtime"},
+            {"event": "workspace_hydrated", "ts": now(), "source": "bitgn_runtime"},
         )
 
     def create_gateway(self, *, harness_url: str, workspace: TaskWorkspace, task_id: str) -> "ToolGateway":

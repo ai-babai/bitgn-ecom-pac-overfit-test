@@ -27,8 +27,6 @@ unsupported with evidence.
 - Struct fields: <= 16.
 - Enum variants: <= 20.
 
-`vendor/` is excluded because external harness checkouts are local runtime dependencies.
-
 ## Design Shape
 
 ```text
