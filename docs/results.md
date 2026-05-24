@@ -1,14 +1,14 @@
 # Benchmark Results
 
-Latest measurements for the Python-only runner. Dev rows are leaderboard submissions named `[@skifmax]-[code-without-llm]-[eniki-beniki]-[v007]`; prod is a fresh blind run without leaderboard submission. For the latest prod run, real elapsed time with 10 workers is `11.901s`; `Wall sum` is the sum of per-task durations.
+Latest measurements for the Python-only runner. Dev rows are leaderboard submissions named `[@skifmax]-[code-without-llm]-[eniki-beniki]-[v007]`; prod is a fresh blind run without leaderboard submission. `Task wall sum` is the sum of per-task durations; `Elapsed` is the real wall-clock time for the whole run. Dev elapsed time was not captured with a local timer.
 
 ## Python-Only Results
 
-| Benchmark | Env | Run id | Tasks | Result | Workers | Leaderboard | Wall sum |
-| --- | --- | --- | ---: | ---: | ---: | --- | ---: |
-| `ecom1_dev` | dev | `leaderboard-ecom-dev-eniki-beniki-v007` | 44 | `44/44` | 10 | yes | `30.181s` |
-| `pac1_dev` | dev | `leaderboard-pac1-dev-eniki-beniki-v007` | 43 | `43/43` | 10 | yes | `93.619s` |
-| `pac1_prod` | prod blind | `pac1-prod-blind-public-verify-001` | 104 | `20/104` | 10 | no | `96.249s` |
+| Benchmark | Env | Run id | Tasks | Result | Workers | Leaderboard | Task wall sum | Elapsed |
+| --- | --- | --- | ---: | ---: | ---: | --- | ---: | ---: |
+| `ecom1_dev` | dev | `leaderboard-ecom-dev-eniki-beniki-v007` | 44 | `44/44` | 10 | yes | `30.181s` | n/a |
+| `pac1_dev` | dev | `leaderboard-pac1-dev-eniki-beniki-v007` | 43 | `43/43` | 10 | yes | `93.619s` | n/a |
+| `pac1_prod` | prod blind | `pac1-prod-blind-public-verify-001` | 104 | `20/104` | 10 | no | `96.249s` | `11.901s` |
 
 ## Timing Snapshot
 

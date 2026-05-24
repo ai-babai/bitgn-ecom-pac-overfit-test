@@ -52,13 +52,13 @@ uv run python -m bitgn_run.cli run \
 
 ## Python-Only Results
 
-| Benchmark | Env | Run id | Tasks | Result | Workers | Leaderboard | Wall sum |
-| --- | --- | --- | ---: | ---: | ---: | --- | ---: |
-| `ecom1_dev` | dev | `leaderboard-ecom-dev-eniki-beniki-v007` | 44 | `44/44` | 10 | yes | `30.181s` |
-| `pac1_dev` | dev | `leaderboard-pac1-dev-eniki-beniki-v007` | 43 | `43/43` | 10 | yes | `93.619s` |
-| `pac1_prod` | prod blind | `pac1-prod-blind-public-verify-001` | 104 | `20/104` | 10 | no | `96.249s` |
+| Benchmark | Env | Run id | Tasks | Result | Workers | Leaderboard | Task wall sum | Elapsed |
+| --- | --- | --- | ---: | ---: | ---: | --- | ---: | ---: |
+| `ecom1_dev` | dev | `leaderboard-ecom-dev-eniki-beniki-v007` | 44 | `44/44` | 10 | yes | `30.181s` | n/a |
+| `pac1_dev` | dev | `leaderboard-pac1-dev-eniki-beniki-v007` | 43 | `43/43` | 10 | yes | `93.619s` | n/a |
+| `pac1_prod` | prod blind | `pac1-prod-blind-public-verify-001` | 104 | `20/104` | 10 | no | `96.249s` | `11.901s` |
 
-For dev rows, `Leaderboard=yes` means these are fresh leaderboard runs named `[@skifmax]-[code-without-llm]-[eniki-beniki]-[v007]`. `pac1_prod` is a blind run without leaderboard. For the latest `pac1_prod`, real elapsed time with 10 workers is `11.901s`; `Wall sum` is the sum of per-task durations.
+For dev rows, `Leaderboard=yes` means these are fresh leaderboard runs named `[@skifmax]-[code-without-llm]-[eniki-beniki]-[v007]`. `pac1_prod` is a blind run without leaderboard. `Task wall sum` is the sum of per-task durations; `Elapsed` is the real wall-clock time for the whole run. Dev `Elapsed` was not captured with a local timer, so it is marked `n/a`.
 
 ## Python-Only Timing Snapshot
 

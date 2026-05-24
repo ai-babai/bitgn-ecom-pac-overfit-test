@@ -52,13 +52,13 @@ uv run python -m bitgn_run.cli run \
 
 ## Результаты Python-only
 
-| Benchmark | Env | Run id | Tasks | Result | Workers | Leaderboard | Wall sum |
-| --- | --- | --- | ---: | ---: | ---: | --- | ---: |
-| `ecom1_dev` | dev | `leaderboard-ecom-dev-eniki-beniki-v007` | 44 | `44/44` | 10 | yes | `30.181s` |
-| `pac1_dev` | dev | `leaderboard-pac1-dev-eniki-beniki-v007` | 43 | `43/43` | 10 | yes | `93.619s` |
-| `pac1_prod` | prod blind | `pac1-prod-blind-public-verify-001` | 104 | `20/104` | 10 | no | `96.249s` |
+| Benchmark | Env | Run id | Tasks | Result | Workers | Leaderboard | Task wall sum | Elapsed |
+| --- | --- | --- | ---: | ---: | ---: | --- | ---: | ---: |
+| `ecom1_dev` | dev | `leaderboard-ecom-dev-eniki-beniki-v007` | 44 | `44/44` | 10 | yes | `30.181s` | n/a |
+| `pac1_dev` | dev | `leaderboard-pac1-dev-eniki-beniki-v007` | 43 | `43/43` | 10 | yes | `93.619s` | n/a |
+| `pac1_prod` | prod blind | `pac1-prod-blind-public-verify-001` | 104 | `20/104` | 10 | no | `96.249s` | `11.901s` |
 
-Для dev-строк `Leaderboard=yes` означает, что это свежие leaderboard-прогоны с именем `[@skifmax]-[code-without-llm]-[eniki-beniki]-[v007]`. `pac1_prod` - слепой прогон без leaderboard. Для последнего `pac1_prod` реальное elapsed-время запуска с 10 workers: `11.901s`; `Wall sum` - сумма времени по задачам.
+Для dev-строк `Leaderboard=yes` означает, что это свежие leaderboard-прогоны с именем `[@skifmax]-[code-without-llm]-[eniki-beniki]-[v007]`. `pac1_prod` - слепой прогон без leaderboard. `Task wall sum` - сумма времени по всем задачам; `Elapsed` - реальное wall-clock время всего запуска. Для dev-прогонов `Elapsed` не фиксировался локальным таймером, поэтому указан как `n/a`.
 
 ## Срез времени Python-only
 
