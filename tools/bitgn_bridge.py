@@ -4,25 +4,15 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any
 
-ROOT = Path(__file__).resolve().parents[1]
-NATIVE = Path(os.getenv("BITGN_NATIVE_PROJECT") or ROOT / "vendor" / "codex-agent-native")
-sys.path.insert(0, str(NATIVE))
-
-from bitgn.harness_connect import HarnessServiceClientSync  # type: ignore  # noqa: E402
-from bitgn.harness_pb2 import EndTrialRequest, StartRunRequest, StartTrialRequest, SubmitRunRequest  # type: ignore  # noqa: E402
-from adapters.ecom import EcomAdapter  # type: ignore  # noqa: E402
-from adapters.pac1 import Pac1LikeAdapter  # type: ignore  # noqa: E402
-from config import BITGN_URL  # type: ignore  # noqa: E402
-from tool_gateway import ToolGateway  # type: ignore  # noqa: E402
-from workspace import create_task_workspace, open_task_workspace  # type: ignore  # noqa: E402
-from pac1_solver import Pac1DeterministicSolver  # noqa: E402
+from bitgn.harness_connect import HarnessServiceClientSync
+from bitgn.harness_pb2 import EndTrialRequest, StartRunRequest, StartTrialRequest, SubmitRunRequest
+from bitgn_runtime import BITGN_URL, BitgnAdapter, ToolGateway, create_task_workspace, open_task_workspace
+from pac1_solver import Pac1DeterministicSolver
 
 
 def emit(payload: dict[str, Any]) -> None:
@@ -34,20 +24,8 @@ def log(_message: str) -> None:
 
 
 
-def setup_adapter(env: str):
-    env = (env or "ecom").strip().lower()
-    if env in {"pac1", "pac1-prod"}:
-        default_benchmark = "bitgn/pac1-prod" if env == "pac1-prod" else "bitgn/pac1-dev"
-        os.environ["BENCHMARK_ID"] = os.getenv("BENCHMARK_ID") or default_benchmark
-        os.environ.setdefault("AGENT_ENV", "pac1")
-        return Pac1LikeAdapter(env="pac1", benchmark_id=os.environ["BENCHMARK_ID"])
-    os.environ["BENCHMARK_ID"] = os.getenv("BENCHMARK_ID") or "bitgn/ecom1-dev"
-    os.environ.setdefault("AGENT_ENV", "ecom")
-    return EcomAdapter(env="ecom", benchmark_id=os.environ["BENCHMARK_ID"])
-
-
-def setup_ecom() -> EcomAdapter:
-    return setup_adapter("ecom")
+def setup_adapter(env: str) -> BitgnAdapter:
+    return BitgnAdapter(env=(env or "ecom").strip().lower())
 
 
 def parse_tasks(value: str) -> list[str]:
@@ -147,11 +125,11 @@ def submit_leaderboard(args: argparse.Namespace) -> int:
 def start(args: argparse.Namespace) -> int:
     os.environ.setdefault("BENCHMARK_ID", "bitgn/ecom1-dev")
     os.environ.setdefault("AGENT_ENV", "ecom")
-    adapter = EcomAdapter(env="ecom", benchmark_id=os.environ["BENCHMARK_ID"])
+    adapter = setup_adapter("ecom")
     client = HarnessServiceClientSync(os.getenv("BENCHMARK_HOST") or BITGN_URL)
     if args.leaderboard:
         raise SystemExit("leaderboard mode is not implemented in the bridge yet")
-    trial = adapter.start_trial(client=client, task_id=args.task_id, trial_seed=None, log=log)
+    trial = adapter.start_trial(client=client, task_id=args.task_id, trial_seed=None, api_key=bitgn_api_key(), log=log)
     ws = create_task_workspace(
         base_dir=args.artifact_dir,
         benchmark_id=os.environ["BENCHMARK_ID"],
@@ -161,16 +139,8 @@ def start(args: argparse.Namespace) -> int:
         local_run_id=args.run_id,
     )
     ws.instruction_path.write_text(trial.instruction + "\n", encoding="utf-8")
-    adapter.write_context(
-        workspace=ws,
-        task_id=args.task_id,
-        local_run_id=args.run_id,
-        harness_url=trial.harness_url,
-        workbook_enabled=False,
-        workbook_reflection_enabled=False,
-    )
-    gateway = adapter.create_gateway(harness_url=trial.harness_url, workspace=ws, task_id=args.task_id)
-    adapter.hydrate_workspace(gateway=gateway, workspace=ws, instruction=trial.instruction, stage=lambda *_: None, task_id=args.task_id)
+    adapter.write_context(workspace=ws, task_id=args.task_id, run_id=args.run_id, harness_url=trial.harness_url)
+    adapter.hydrate_workspace(workspace=ws, instruction=trial.instruction)
     ws.write_json(ws.root / "bridge_trial.json", {"trial_id": trial.trial_id, "task_id": args.task_id, "started_at": now()})
     emit({"ok": True, "task_id": args.task_id, "trial_id": trial.trial_id, "workspace": str(ws.root), "instruction": trial.instruction})
     return 0
@@ -544,7 +514,7 @@ class DeterministicSolver:
             named = re.search(r"payment_id:\s*(pay_\d+)", content)
             if named and named.group(1) != payment_id:
                 continue
-            m = re.search(r"(?:only after|retry_available_at:)\s*(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})Z", content)
+            m = re.search(r"(?:only after|retry_available_at:|recovery resumes at)\s*(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})Z", content)
             if not m:
                 continue
             now = str(self.exec_tool("/bin/date").get("stdout") or "")
@@ -774,14 +744,10 @@ def run_task(args: argparse.Namespace) -> int:
     if args.leaderboard and trial_seed and not trial_seed.get("harness_url"):
         raw_trial = client.start_trial(StartTrialRequest(trial_id=str(trial_seed["trial_id"])))
         actual_task_id = str(raw_trial.task_id)
-        trial = SimpleNamespace(
-            trial_id=str(raw_trial.trial_id),
-            harness_url=str(raw_trial.harness_url),
-            instruction=str(raw_trial.instruction),
-        )
+        trial = adapter.start_trial(client=client, task_id=actual_task_id, trial_seed={"trial_id": str(raw_trial.trial_id), "harness_url": str(raw_trial.harness_url), "instruction": str(raw_trial.instruction)}, api_key=bitgn_api_key(), log=log)
     else:
         actual_task_id = args.task_id
-        trial = adapter.start_trial(client=client, task_id=args.task_id, trial_seed=trial_seed, log=log)
+        trial = adapter.start_trial(client=client, task_id=args.task_id, trial_seed=trial_seed, api_key=bitgn_api_key(), log=log)
     runtime_env = "pac1" if args.env.startswith("pac1") else args.env
     ws = create_task_workspace(
         base_dir=args.artifact_dir,
@@ -793,16 +759,9 @@ def run_task(args: argparse.Namespace) -> int:
     )
     started = time.monotonic()
     ws.instruction_path.write_text(trial.instruction + "\n", encoding="utf-8")
-    adapter.write_context(
-        workspace=ws,
-        task_id=actual_task_id,
-        local_run_id=args.run_id,
-        harness_url=trial.harness_url,
-        workbook_enabled=False,
-        workbook_reflection_enabled=False,
-    )
+    adapter.write_context(workspace=ws, task_id=actual_task_id, run_id=args.run_id, harness_url=trial.harness_url)
     gateway = adapter.create_gateway(harness_url=trial.harness_url, workspace=ws, task_id=actual_task_id)
-    adapter.hydrate_workspace(gateway=gateway, workspace=ws, instruction=trial.instruction, stage=lambda *_: None, task_id=actual_task_id)
+    adapter.hydrate_workspace(workspace=ws, instruction=trial.instruction)
     ws.write_json(ws.root / "bridge_trial.json", {"trial_id": trial.trial_id, "task_id": actual_task_id, "started_at": now()})
     if args.env.startswith("pac1"):
         report = Pac1DeterministicSolver(gateway, trial.instruction, actual_task_id).solve()

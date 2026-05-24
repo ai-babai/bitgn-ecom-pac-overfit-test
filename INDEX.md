@@ -5,7 +5,8 @@ Clean-room deterministic BitGN ECOM runner.
 ## Current Shape
 
 - `src/` - Rust CLI, bridge, parser, gates, runner, and deterministic solvers.
-- `tools/bitgn_bridge.py` - thin Python bridge into the BitGN native harness.
+- `tools/bitgn_bridge.py` - local Python CLI bridge and deterministic ECOM solver.
+- `tools/bitgn_runtime.py` - clean-room BitGN API client, environment adapters, gateway, and workspace helpers.
 - `rules/` - versionable rule registry for enabled deterministic rule families.
 - `docs/principles.md` - project coding and runtime principles.
 - `scripts/check_code_limits.py` - local code-size guardrail.

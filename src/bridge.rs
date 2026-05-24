@@ -1,22 +1,16 @@
 use crate::types::TaskResult;
 use serde_json::Value;
-use std::env;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 #[derive(Debug, Clone)]
 pub struct Bridge {
-    project: PathBuf,
     script: PathBuf,
 }
 
 impl Bridge {
     pub fn discover() -> Self {
         Self {
-            project: PathBuf::from(
-                env::var("BITGN_NATIVE_PROJECT")
-                    .unwrap_or_else(|_| "vendor/codex-agent-native".to_string()),
-            ),
             script: PathBuf::from("tools/bitgn_bridge.py"),
         }
     }
@@ -83,8 +77,6 @@ impl Bridge {
     fn base_args(&self) -> Vec<String> {
         vec![
             "run".into(),
-            "--project".into(),
-            self.project.display().to_string(),
             "python".into(),
             self.script.display().to_string(),
         ]

@@ -4,12 +4,15 @@ Latest saved measurements for this repository.
 
 | Benchmark | Env | Run id | Tasks | Result | Workers | Leaderboard | Wall sum |
 | --- | --- | --- | ---: | ---: | ---: | --- | ---: |
-| `pac1_dev` | dev | `pac1-leaderboard-shmygolet-v007-002` | 43 | `43/43` | 10 | yes | `140.800s` local |
-| `ecom1_dev` | dev | `main-ecom-dev-001` | 44 | `44/44` | 10 | no | `58.203s` |
+| `pac1_dev` | dev | `decouple-pac1-dev-001` | 43 | `43/43` | 10 | no | `89.142s` local |
+| `ecom1_dev` | dev | `decouple-ecom-dev-002` | 44 | `44/44` | 10 | yes | `48.020s` local; `0:23` leaderboard |
 | `pac1_prod` | prod blind | `pac1-prod-blind-003` | 104 | `20/104` | 10 | no | `184.323s` |
 
-PAC1 dev leaderboard was submitted with run name:
+PAC1 dev latest verification is local-only. Previous leaderboard run name:
 `[@skifmax]-[code-without-llm]-[shmygolet]-[v007]`.
+
+ECOM dev leaderboard was submitted with run name:
+`[@skifmax]-[code-without-llm]-[shmygolet]-[v006]`.
 
 PAC1 prod blind failed task ids:
 

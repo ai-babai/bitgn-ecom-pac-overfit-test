@@ -13,8 +13,7 @@
 - Linux/macOS shell с `bash`.
 - Rust toolchain: `cargo`, `rustc`, `rustfmt`.
 - Python 3.
-- `uv` для запуска Python bridge через изолированный project runner.
-- Локальный BitGN native harness checkout. Если он расположен не в `vendor/codex-agent-native`, задайте `BITGN_NATIVE_PROJECT`.
+- `uv` для запуска Python bridge с официальными BitGN generated packages.
 - Доступ к BitGN harness и, для leaderboard, BitGN API key.
 
 ### Быстрый старт
@@ -31,17 +30,8 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Проверка сборки:
 cargo test
-python3 -m py_compile tools/bitgn_bridge.py tools/pac1_solver.py
+uv run python -m py_compile tools/bitgn_bridge.py tools/bitgn_runtime.py tools/pac1_solver.py
 scripts/check_code_limits.py
-```
-
-### BitGN native harness
-
-Python bridge ожидает BitGN native harness в `vendor/codex-agent-native`. Если
-каталог расположен иначе, передайте путь через переменную окружения:
-
-```bash
-export BITGN_NATIVE_PROJECT=/path/to/codex-agent-native
 ```
 
 ### Leaderboard credentials
@@ -54,11 +44,12 @@ Leaderboard submit включается только явно через `--lead
 
 | Benchmark | Env | Run id | Tasks | Result | Workers | Leaderboard | Wall sum |
 | --- | --- | --- | ---: | ---: | ---: | --- | ---: |
-| `pac1_dev` | dev | `pac1-leaderboard-shmygolet-v007-002` | 43 | `43/43` | 10 | yes | `140.800s` local |
-| `ecom1_dev` | dev | `main-ecom-dev-001` | 44 | `44/44` | 10 | no | `58.203s` |
+| `pac1_dev` | dev | `decouple-pac1-dev-001` | 43 | `43/43` | 10 | no | `89.142s` local |
+| `ecom1_dev` | dev | `decouple-ecom-dev-002` | 44 | `44/44` | 10 | yes | `48.020s` local; `0:23` leaderboard |
 | `pac1_prod` | prod blind | `pac1-prod-blind-003` | 104 | `20/104` | 10 | no | `184.323s` |
 
-PAC1 dev leaderboard name: `[@skifmax]-[code-without-llm]-[shmygolet]-[v007]`.
+PAC1 dev latest verification is local-only. Previous leaderboard name: `[@skifmax]-[code-without-llm]-[shmygolet]-[v007]`.
+ECOM dev leaderboard name: `[@skifmax]-[code-without-llm]-[shmygolet]-[v006]`.
 PAC1 prod был слепым прогоном по `t000..t103` без leaderboard submit.
 
 ### Важное ограничение
@@ -77,23 +68,23 @@ bitgn-ecom-run
 │   ├── main.rs        # CLI entrypoint
 │   ├── config.rs      # env/tasks/workers/leaderboard/fail-fast/run limits
 │   ├── runner.rs      # parallel task execution and guarded leaderboard submit
-│   ├── bridge.rs      # Rust -> Python bridge boundary
+│   ├── bridge.rs      # Rust -> local Python BitGN API boundary
 │   ├── artifacts.rs   # run_config, manifest, summary artifacts
 │   └── types.rs       # TaskResult contract
 ├── tools/
-│   ├── bitgn_bridge.py # BitGN harness bridge and ECOM deterministic solver
-│   └── pac1_solver.py  # PAC1 deterministic solver
-├── rules/             # rule selector names passed into run config
-├── scripts/           # local quality checks
-└── vendor/codex-agent-native/  # локальный BitGN native harness, не коммитится
+│   ├── bitgn_bridge.py  # CLI bridge and ECOM deterministic solver
+│   ├── bitgn_runtime.py # local BitGN API client, adapters, gateway, workspace
+│   └── pac1_solver.py   # PAC1 deterministic solver
+├── rules/              # rule selector names passed into run config
+└── scripts/            # local quality checks
 ```
 
 Основной цикл:
 
 1. Rust CLI читает конфигурацию запуска.
 2. `runner.rs` распределяет задачи по worker-потокам.
-3. `bridge.rs` вызывает `tools/bitgn_bridge.py` через `uv run`.
-4. Python bridge стартует trial, гидратит workspace, выбирает deterministic solver
+3. `bridge.rs` вызывает локальный `tools/bitgn_bridge.py` через `uv run`.
+4. Python bridge через официальные BitGN packages стартует trial, гидратит workspace, выбирает deterministic solver
    по benchmark env, отправляет completion и закрывает trial.
 5. Rust собирает `TaskResult`, пишет артефакты и делает leaderboard submit только
    при включенном `--leaderboard true` и прохождении gate-условий.

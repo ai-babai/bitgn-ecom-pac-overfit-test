@@ -13,8 +13,7 @@ can switch between ECOM dev, PAC1 dev, and PAC1 prod.
 - Linux/macOS shell with `bash`.
 - Rust toolchain: `cargo`, `rustc`, `rustfmt`.
 - Python 3.
-- `uv` to run the Python bridge through an isolated project runner.
-- Local BitGN native harness checkout. Set `BITGN_NATIVE_PROJECT` if it is not under `vendor/codex-agent-native`.
+- `uv` to run the Python bridge with official BitGN generated packages.
 - BitGN harness access and, for leaderboard runs, a BitGN API key.
 
 ### Quick Start
@@ -31,17 +30,8 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Verify the local setup:
 cargo test
-python3 -m py_compile tools/bitgn_bridge.py tools/pac1_solver.py
+uv run python -m py_compile tools/bitgn_bridge.py tools/bitgn_runtime.py tools/pac1_solver.py
 scripts/check_code_limits.py
-```
-
-### BitGN Native Harness
-
-The Python bridge expects the BitGN native harness under `vendor/codex-agent-native`.
-If the checkout lives elsewhere, pass it through an environment variable:
-
-```bash
-export BITGN_NATIVE_PROJECT=/path/to/codex-agent-native
 ```
 
 ### Leaderboard Credentials
@@ -54,11 +44,12 @@ print or commit secrets.
 
 | Benchmark | Env | Run id | Tasks | Result | Workers | Leaderboard | Wall sum |
 | --- | --- | --- | ---: | ---: | ---: | --- | ---: |
-| `pac1_dev` | dev | `pac1-leaderboard-shmygolet-v007-002` | 43 | `43/43` | 10 | yes | `140.800s` local |
-| `ecom1_dev` | dev | `main-ecom-dev-001` | 44 | `44/44` | 10 | no | `58.203s` |
+| `pac1_dev` | dev | `decouple-pac1-dev-001` | 43 | `43/43` | 10 | no | `89.142s` local |
+| `ecom1_dev` | dev | `decouple-ecom-dev-002` | 44 | `44/44` | 10 | yes | `48.020s` local; `0:23` leaderboard |
 | `pac1_prod` | prod blind | `pac1-prod-blind-003` | 104 | `20/104` | 10 | no | `184.323s` |
 
-PAC1 dev leaderboard name: `[@skifmax]-[code-without-llm]-[shmygolet]-[v007]`.
+PAC1 dev latest verification is local-only. Previous leaderboard name: `[@skifmax]-[code-without-llm]-[shmygolet]-[v007]`.
+ECOM dev leaderboard name: `[@skifmax]-[code-without-llm]-[shmygolet]-[v006]`.
 PAC1 prod was a blind run over `t000..t103` without leaderboard submission.
 
 ### Important Limitation
@@ -77,15 +68,15 @@ bitgn-ecom-run
 │   ├── main.rs        # CLI entrypoint
 │   ├── config.rs      # env/tasks/workers/leaderboard/fail-fast/run limits
 │   ├── runner.rs      # parallel task execution and guarded leaderboard submit
-│   ├── bridge.rs      # Rust -> Python bridge boundary
+│   ├── bridge.rs      # Rust -> local Python BitGN API boundary
 │   ├── artifacts.rs   # run_config, manifest, summary artifacts
 │   └── types.rs       # TaskResult contract
 ├── tools/
-│   ├── bitgn_bridge.py # BitGN harness bridge and ECOM deterministic solver
-│   └── pac1_solver.py  # PAC1 deterministic solver
-├── rules/             # rule selector names passed into run config
-├── scripts/           # local quality checks
-└── vendor/codex-agent-native/  # local BitGN native harness, not committed
+│   ├── bitgn_bridge.py  # CLI bridge and ECOM deterministic solver
+│   ├── bitgn_runtime.py # local BitGN API client, adapters, gateway, workspace
+│   └── pac1_solver.py   # PAC1 deterministic solver
+├── rules/              # rule selector names passed into run config
+└── scripts/            # local quality checks
 ```
 
 Main flow:
