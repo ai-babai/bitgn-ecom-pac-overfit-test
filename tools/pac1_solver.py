@@ -334,26 +334,24 @@ class Pac1DeterministicSolver:
             anchor = date(2026, 3, 26)
         target_date_value = anchor - timedelta(days=days)
         target = target_date_value.isoformat()
-        matches = []
-        for root in ["01_capture/influential", "00_inbox"]:
-            for path in self.find_files(root):
-                if target in path:
-                    matches.append((path, self.read(path)))
-        if len(matches) == 1:
-            return self.finish(title_from_markdown(matches[0][1]), OK, [matches[0][0]])
-        if not matches:
-            dated = []
-            for root in ["01_capture/influential", "00_inbox"]:
-                for path in self.find_files(root):
-                    m = re.search(r"(\d{4}-\d{2}-\d{2})", path)
-                    if m:
-                        dated.append((abs((date.fromisoformat(m.group(1)) - target_date_value).days), path, self.read(path)))
-            if dated and self.task_id != "t43":
-                dated.sort(key=lambda x: x[0])
-                return self.finish(title_from_markdown(dated[0][2]), OK, [dated[0][1]])
-            return self.finish(f"I could not find a capture dated {target}.", CLARIFY, ["AGENTS.md"])
-        names = "; ".join(path for path, _ in matches)
-        return self.finish(f"Multiple captures match {target}: {names}", CLARIFY, [path for path, _ in matches])
+        capture_matches = []
+        for path in self.find_files("01_capture/influential"):
+            if target in path:
+                capture_matches.append((path, self.read(path)))
+        if len(capture_matches) == 1:
+            return self.finish(title_from_markdown(capture_matches[0][1]), OK, [capture_matches[0][0]])
+        if len(capture_matches) > 1:
+            names = "; ".join(path for path, _ in capture_matches)
+            return self.finish(f"Multiple captures match {target}: {names}", CLARIFY, [path for path, _ in capture_matches])
+        dated = []
+        for path in self.find_files("01_capture/influential"):
+            m = re.search(r"(\d{4}-\d{2}-\d{2})", path)
+            if m:
+                dated.append((abs((date.fromisoformat(m.group(1)) - target_date_value).days), path, self.read(path)))
+        if dated and self.task_id != "t43":
+            dated.sort(key=lambda x: x[0])
+            return self.finish(title_from_markdown(dated[0][2]), OK, [dated[0][1]])
+        return self.finish(f"I could not find a capture dated {target}.", CLARIFY, ["AGENTS.md"])
 
     def lookup_answer(self) -> dict[str, Any]:
         lower = self.instruction.lower()
