@@ -4,22 +4,7 @@
 
 `bitgn-ecom-pac-lab` is an experimental lab for BitGN ECOM/PAC1 benchmarks. The project explores different strategies for solving benchmark tasks; the current main strategy uses pre-written deterministic code without AI/LLM calls during task execution.
 
-## Installation
-
-Requirements:
-
-- Linux/macOS shell with `bash`.
-- Python 3.14 through `uv`.
-- BitGN harness access.
-- A BitGN API key is required for ECOM and explicitly enabled leaderboard runs.
-
-```bash
-cd bitgn-ecom-pac-lab
-curl -LsSf https://astral.sh/uv/install.sh | sh
-uv sync
-uv run python -m py_compile bitgn_run/*.py tools/*.py
-scripts/check_code_limits.py
-```
+Quick navigation: detailed [environment setup and verification](#environment-setup-and-verification) is at the end of this README.
 
 ## No-Leaderboard Usage
 
@@ -119,3 +104,78 @@ To inspect the accumulated heuristics, rules, and task instructions that current
 This is a strong code overfit to known dev tasks, with no LLM calls and no general
 reasoning loop. The PAC1 prod gap remains the key warning: dev results should not
 be treated as evidence of transfer to unseen tasks.
+
+## Environment Setup And Verification
+
+This section is reference material: installation is not the main purpose of the repository, but these steps are enough to run it locally.
+
+### Requirements
+
+- Linux/macOS shell with `bash`.
+- `git` and `curl`.
+- `uv` for Python and dependency management.
+- BitGN harness access.
+- BitGN API key for ECOM and leaderboard runs. PAC1 playground usually starts without a key, but the shared runner can read the same key.
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/ai-babai/bitgn-ecom-pac-lab.git
+cd bitgn-ecom-pac-lab
+```
+
+If the local checkout was created before the repository rename:
+
+```bash
+git remote set-url origin https://github.com/ai-babai/bitgn-ecom-pac-lab.git
+```
+
+### 2. Install uv and Python
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+uv python install 3.14
+uv sync
+```
+
+`uv sync` installs dependencies from `pyproject.toml` and `uv.lock`, including the official BitGN generated packages.
+
+### 3. Provide the BitGN API key
+
+You can use an environment variable:
+
+```bash
+export BITGN_API_KEY="..."
+```
+
+Or the standard local file:
+
+```bash
+mkdir -p ~/.bitgn
+printf '%s\n' '...' > ~/.bitgn/bitgn-api-key
+chmod 600 ~/.bitgn/bitgn-api-key
+```
+
+`BITGN_ECOM_API_KEY`, `BITGN_API_KEY_FILE`, and `BITGN_ECOM_API_KEY_FILE` are also supported. Do not commit secrets or print them into logs.
+
+### 4. Verify the environment
+
+```bash
+uv run python -m py_compile bitgn_run/*.py tools/*.py
+scripts/check_code_limits.py
+```
+
+Minimal smoke run without leaderboard:
+
+```bash
+uv run python -m bitgn_run.cli run \
+  --env pac1 \
+  --run-id smoke-pac1-t01 \
+  --leaderboard false \
+  --fail-fast true \
+  --workers 1 \
+  --tasks t01 \
+  --artifact-dir runs
+```
+
+Artifacts are written to `runs/`; this directory is intentionally not committed.

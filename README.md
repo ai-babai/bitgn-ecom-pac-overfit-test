@@ -4,22 +4,7 @@
 
 `bitgn-ecom-pac-lab` - экспериментальная лаборатория для BitGN-бенчмарков ECOM/PAC1. Проект проверяет разные стратегии решения benchmark-задач; текущая основная стратегия использует заранее написанный детерминированный код без AI/LLM-вызовов во время выполнения задач.
 
-## Установка
-
-Требования:
-
-- Linux/macOS shell с `bash`.
-- Python 3.14 через `uv`.
-- Доступ к BitGN harness.
-- BitGN API key нужен для ECOM и явно включенных leaderboard-запусков.
-
-```bash
-cd bitgn-ecom-pac-lab
-curl -LsSf https://astral.sh/uv/install.sh | sh
-uv sync
-uv run python -m py_compile bitgn_run/*.py tools/*.py
-scripts/check_code_limits.py
-```
+Короткая навигация: подробная [установка и проверка окружения](#установка-и-проверка-окружения) вынесена в конец README.
 
 ## Запуск без leaderboard
 
@@ -120,3 +105,78 @@ submit делает только при `--leaderboard true` и успешном
 Это сильный code overfit под известные dev-задачи, без LLM и без обобщающего
 reasoning. Контраст с PAC1 prod остается главным индикатором: dev-результаты не
 доказывают переносимость на новые задачи.
+
+## Установка и проверка окружения
+
+Эта секция справочная: установка не является основной целью репозитория, но по ней можно быстро поднять локальный запуск.
+
+### Требования
+
+- Linux/macOS shell с `bash`.
+- `git` и `curl`.
+- `uv` для управления Python и зависимостями.
+- Доступ к BitGN harness.
+- BitGN API key для ECOM и leaderboard-запусков. PAC1 playground обычно стартует без ключа, но общий runner умеет читать тот же ключ.
+
+### 1. Получить репозиторий
+
+```bash
+git clone https://github.com/ai-babai/bitgn-ecom-pac-lab.git
+cd bitgn-ecom-pac-lab
+```
+
+Если локальная копия была сделана до переименования репозитория:
+
+```bash
+git remote set-url origin https://github.com/ai-babai/bitgn-ecom-pac-lab.git
+```
+
+### 2. Установить uv и Python
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+uv python install 3.14
+uv sync
+```
+
+`uv sync` поставит зависимости из `pyproject.toml` и `uv.lock`, включая официальные generated packages BitGN.
+
+### 3. Передать BitGN API key
+
+Можно использовать переменную окружения:
+
+```bash
+export BITGN_API_KEY="..."
+```
+
+Или стандартный локальный файл:
+
+```bash
+mkdir -p ~/.bitgn
+printf '%s\n' '...' > ~/.bitgn/bitgn-api-key
+chmod 600 ~/.bitgn/bitgn-api-key
+```
+
+Также поддерживаются `BITGN_ECOM_API_KEY`, `BITGN_API_KEY_FILE` и `BITGN_ECOM_API_KEY_FILE`. Секреты нельзя коммитить и нельзя печатать в логи.
+
+### 4. Проверить окружение
+
+```bash
+uv run python -m py_compile bitgn_run/*.py tools/*.py
+scripts/check_code_limits.py
+```
+
+Минимальный smoke-run без leaderboard:
+
+```bash
+uv run python -m bitgn_run.cli run \
+  --env pac1 \
+  --run-id smoke-pac1-t01 \
+  --leaderboard false \
+  --fail-fast true \
+  --workers 1 \
+  --tasks t01 \
+  --artifact-dir runs
+```
+
+Артефакты пишутся в `runs/`, этот каталог намеренно не коммитится.
