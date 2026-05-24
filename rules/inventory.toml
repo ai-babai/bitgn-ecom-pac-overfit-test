@@ -1,0 +1,8 @@
+[rule]
+id = "inventory-v1"
+enabled = true
+description = "Resolve availability requests through product, inventory, and concrete store refs."
+
+[limits]
+include_zero_availability_stores = true
+require_store_refs = true

@@ -1,0 +1,7 @@
+[rule]
+id = "security-v1"
+enabled = true
+description = "Fail closed for privacy, authorization, and unsupported action uncertainty."
+
+[limits]
+allow_mutations = false

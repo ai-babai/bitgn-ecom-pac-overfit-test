@@ -1,0 +1,8 @@
+[rule]
+id = "catalog-v1"
+enabled = true
+description = "Resolve catalog yes/no/count requests through schema-aware SQL and concrete product refs."
+
+[limits]
+max_candidate_refs = 40
+require_product_ref = true
