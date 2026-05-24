@@ -1,19 +1,21 @@
 # bitgn-ecom-run Index
 
-Clean-room deterministic BitGN ECOM runner.
+Clean-room deterministic BitGN ECOM/PAC runner.
 
 ## Current Shape
 
-- `src/` - Rust CLI, bridge, parser, gates, runner, and deterministic solvers.
-- `tools/bitgn_bridge.py` - local Python CLI bridge and deterministic ECOM solver.
+- `bitgn_run/` - Python CLI, config parser, parallel runner, artifacts, and result contracts.
+- `tools/bitgn_bridge.py` - callable task lifecycle plus legacy single-task CLI commands.
 - `tools/bitgn_runtime.py` - clean-room BitGN API client, environment adapters, gateway, and workspace helpers.
+- `tools/ecom_solver.py` - deterministic ECOM solver families.
+- `tools/pac1_solver.py` - deterministic PAC1 solver families.
 - `rules/` - versionable rule registry for enabled deterministic rule families.
 - `docs/principles.md` - project coding and runtime principles.
-- `scripts/check_code_limits.py` - local code-size guardrail.
+- `scripts/check_code_limits.py` - local Python code-size guardrail.
 - `runs/` - ignored local run artifacts.
 
-## MVP Capability
+## Capability
 
-The current MVP solves structured catalogue yes/no and negative-claim checks
-without LLM calls, through SQL, concrete product reads, completion gates, and
-run artifacts.
+The current branch is Python-only and solves ECOM dev and PAC1 dev without LLM
+calls. It is intentionally a code-overfit experiment; use PAC1 prod as the sanity
+check for transfer to unseen tasks.

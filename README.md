@@ -1,133 +1,35 @@
 # bitgn-ecom-run
 
-[English](README.en.md) | [Русский](README.ru.md)
+[English](README.en.md)
 
-`bitgn-ecom-run` - code-only runner для BitGN ECOM/PAC1. Текущая версия решает
-задачи детерминированными алгоритмами, без вызовов LLM. Один CLI умеет
-переключаться между ECOM dev, PAC1 dev и PAC1 prod.
+`bitgn-ecom-run` - code-only runner для BitGN ECOM/PAC1. Эта ветка переводит
+оркестрацию на один язык: Python. Задачи решаются детерминированными алгоритмами,
+без вызовов LLM и без Rust-обертки.
 
 ## Установка
 
-### Требования
+Требования:
 
 - Linux/macOS shell с `bash`.
-- Rust toolchain: `cargo`, `rustc`, `rustfmt`.
-- Python 3.
-- `uv` для запуска Python bridge с официальными BitGN generated packages.
-- Доступ к BitGN harness и, для leaderboard, BitGN API key.
-
-### Быстрый старт
+- Python 3.14 через `uv`.
+- Доступ к BitGN harness.
+- BitGN API key нужен для ECOM и только явно включенных leaderboard-запусков.
 
 ```bash
 cd bitgn-ecom-run
-
-# Если Rust еще не установлен:
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-. "$HOME/.cargo/env"
-
-# Если uv еще не установлен:
 curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Проверка сборки:
-cargo test
-uv run python -m py_compile tools/bitgn_bridge.py tools/bitgn_runtime.py tools/ecom_solver.py tools/pac1_solver.py
+uv sync
+uv run python -m py_compile bitgn_run/*.py tools/*.py
 scripts/check_code_limits.py
 ```
 
-### Leaderboard credentials
-
-Leaderboard submit включается только явно через `--leaderboard true`. Ключ можно
-передать окружением или стандартным локальным файлом BitGN. Не печатай и не
-коммить секреты.
-
-## Статус замеров
-
-| Benchmark | Env | Run id | Tasks | Result | Workers | Leaderboard | Wall sum |
-| --- | --- | --- | ---: | ---: | ---: | --- | ---: |
-| `pac1_dev` | dev | `decouple-pac1-dev-001` | 43 | `43/43` | 10 | yes | `89.142s` local |
-| `ecom1_dev` | dev | `decouple-ecom-dev-002` | 44 | `44/44` | 10 | yes | `48.020s` local; `0:23` leaderboard |
-| `pac1_prod` | prod blind | `pac1-prod-blind-003` | 104 | `20/104` | 10 | no | `184.323s` |
-
-Для dev-строк `Leaderboard=yes` означает, что для этого benchmark есть успешный
-leaderboard-артефакт; `Run id` и timing показывают последний локальный
-проверочный прогон без submit. PAC1 prod был слепым прогоном по `t000..t103` без
-leaderboard submit.
-
-## Срез времени
-
-Замер снят по последним локальным dev-прогонам без leaderboard submit для dev-suite, которые уже имеют успешные leaderboard-артефакты. `Task wall` - сумма `wall_seconds` по задачам. Tool-этапы считаются из `tool_calls.jsonl`; `Overhead` - остаток внутри task wall: локальный solver, файловые артефакты, закрытие trial и scoring.
-
-| Benchmark | Run id | Tasks | Workers | Task wall sum | Avg task | Median | P95 | Tool calls sum | Read/search stage | Action stage | Completion stage | Overhead |
-| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `ecom1_dev` | `decouple-ecom-dev-002` | 44 | 10 | `48.020s` | `1.091s` | `0.569s` | `1.312s` | `32.870s` | `11.740s` | `19.108s` | `2.022s` | `15.150s` |
-| `pac1_dev` | `decouple-pac1-dev-001` | 43 | 10 | `89.142s` | `2.073s` | `1.523s` | `4.523s` | `86.056s` | `77.463s` | `4.142s` | `4.451s` | `3.086s` |
-
-Для ECOM видимый tool-window был около `65.856s`, что больше task wall sum: старт trials и часть очереди сейчас не входят в `wall_seconds`. Для PAC1 видимый tool-window был около `16.655s`, потому что задачи реально легли на 10 worker-потоков.
-
-### Важное ограничение
-
-Это решение является сильным code overfit под известные dev-задачи, без LLM и без
-обобщающего агентского reasoning. Это осознанный эксперимент: проверить, сколько
-можно закрыть чистым кодом и правилами. Контраст хорошо виден на PAC1: `43/43`
-на PAC1 dev против `20/104` на слепом PAC1 prod. Поэтому текущие dev-результаты
-нельзя трактовать как доказательство высокой переносимости на новые задачи.
-
-## Архитектура
-
-```text
-bitgn-ecom-run
-├── src/
-│   ├── main.rs        # CLI entrypoint
-│   ├── config.rs      # env/tasks/workers/leaderboard/fail-fast/run limits
-│   ├── runner.rs      # parallel task execution and guarded leaderboard submit
-│   ├── bridge.rs      # Rust -> local Python BitGN API boundary
-│   ├── artifacts.rs   # run_config, manifest, summary artifacts
-│   └── types.rs       # TaskResult contract
-├── tools/
-│   ├── bitgn_bridge.py  # Python CLI-мост между Rust и BitGN runtime
-│   ├── bitgn_runtime.py # локальный BitGN API client, adapters, gateway, workspace
-│   ├── ecom_solver.py   # ECOM deterministic solver
-│   └── pac1_solver.py   # PAC1 deterministic solver
-├── rules/              # rule selector names passed into run config
-└── scripts/            # local quality checks
-```
-
-Основной цикл:
-
-1. Rust CLI читает конфигурацию запуска.
-2. `runner.rs` распределяет задачи по worker-потокам.
-3. `bridge.rs` вызывает локальный `tools/bitgn_bridge.py` через `uv run`.
-4. Python bridge через официальные BitGN packages стартует trial, гидратит workspace, выбирает deterministic solver
-   по benchmark env, отправляет completion и закрывает trial.
-5. Rust собирает `TaskResult`, пишет артефакты и делает leaderboard submit только
-   при включенном `--leaderboard true` и прохождении gate-условий.
-
-## Зачем Rust
-
-Rust-код сейчас отвечает за внешний runner: CLI-конфигурацию, список задач,
-worker-потоки, fail-fast, артефакты, подсчет `TaskResult` и gate перед
-leaderboard submit. Solver-логика остается в Python, потому что BitGN generated
-packages и runtime API сейчас используются из Python. Если runner перестанет
-быть нужен как отдельный быстрый слой оркестрации, проект можно будет упростить
-до Python CLI, но пока Rust дает типизированную оболочку и параллельный запуск.
-
-## Переключение benchmark
-
-Поддерживаемые значения:
-
-- `--env ecom` -> `bitgn/ecom1-dev`
-- `--env pac1` -> `bitgn/pac1-dev`
-- `--env pac1-prod` -> `bitgn/pac1-prod`
-
-`BENCHMARK_ID` можно задать явно в окружении, если нужен нестандартный benchmark.
-
-## Запуск
+## Запуск без leaderboard
 
 ECOM dev:
 
 ```bash
 TASKS=$(printf 't%02d,' $(seq 1 44)); TASKS=${TASKS%,}
-cargo run -- run \
+uv run python -m bitgn_run.cli run \
   --env ecom \
   --run-id ecom-dev-local \
   --leaderboard false \
@@ -141,7 +43,7 @@ PAC1 dev:
 
 ```bash
 TASKS=$(printf 't%02d,' $(seq 1 43)); TASKS=${TASKS%,}
-cargo run -- run \
+uv run python -m bitgn_run.cli run \
   --env pac1 \
   --run-id pac1-dev-local \
   --leaderboard false \
@@ -155,7 +57,7 @@ PAC1 prod blind:
 
 ```bash
 TASKS=$(printf 't%03d,' $(seq 0 103)); TASKS=${TASKS%,}
-cargo run -- run \
+uv run python -m bitgn_run.cli run \
   --env pac1-prod \
   --run-id pac1-prod-blind-local \
   --leaderboard false \
@@ -165,11 +67,52 @@ cargo run -- run \
   --artifact-dir runs
 ```
 
-## Проверки
+## Замеры DEV без leaderboard
 
-```bash
-uv run python -m py_compile tools/bitgn_bridge.py tools/bitgn_runtime.py tools/ecom_solver.py tools/pac1_solver.py
-cargo fmt -- --check
-cargo test
-scripts/check_code_limits.py
+| Benchmark | Runner | Run id | Tasks | Result | Workers | Leaderboard | Wall sum |
+| --- | --- | --- | ---: | ---: | ---: | --- | ---: |
+| `ecom1_dev` | Rust wrapper baseline | `decouple-ecom-dev-002` | 44 | `44/44` | 10 | no local, yes artifact | `48.020s` |
+| `ecom1_dev` | Python-only | `python-only-ecom-dev-001` | 44 | `44/44` | 10 | no | `49.344s` |
+| `pac1_dev` | Rust wrapper baseline | `decouple-pac1-dev-001` | 43 | `43/43` | 10 | no local, yes artifact | `89.142s` |
+| `pac1_dev` | Python-only | `python-only-pac1-dev-001` | 43 | `43/43` | 10 | no | `89.099s` |
+
+Итог: Python-only сохраняет качество. По скорости PAC1 практически без изменений
+и чуть быстрее по сумме task wall, ECOM стал примерно на `1.324s` медленнее по
+сумме task wall.
+
+## Срез времени Python-only
+
+| Benchmark | Run id | Tasks | Workers | Task wall sum | Avg task | Median | P95 | Tool calls sum | Read/search stage | Action stage | Completion stage | Overhead |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `ecom1_dev` | `python-only-ecom-dev-001` | 44 | 10 | `49.344s` | `1.121s` | `0.658s` | `1.406s` | `34.340s` | `12.734s` | `19.171s` | `2.435s` | `15.004s` |
+| `pac1_dev` | `python-only-pac1-dev-001` | 43 | 10 | `89.099s` | `2.072s` | `1.498s` | `4.743s` | `85.664s` | `77.458s` | `3.903s` | `4.303s` | `3.435s` |
+
+## Архитектура
+
+```text
+bitgn-ecom-run
+├── bitgn_run/
+│   ├── cli.py        # CLI entrypoint
+│   ├── config.py     # env/tasks/workers/leaderboard/fail-fast/run limits
+│   ├── runner.py     # parallel task execution and guarded leaderboard submit
+│   ├── artifacts.py  # run_config, manifest, summary artifacts
+│   └── types.py      # TaskResult contract
+├── tools/
+│   ├── bitgn_bridge.py  # callable task lifecycle and legacy CLI commands
+│   ├── bitgn_runtime.py # BitGN API client, adapters, gateway, workspace
+│   ├── ecom_solver.py   # ECOM deterministic solver
+│   └── pac1_solver.py   # PAC1 deterministic solver
+├── rules/              # rule selector names passed into run config
+└── scripts/            # local quality checks
 ```
+
+Основной цикл: Python CLI читает конфигурацию, распределяет задачи по worker
+threads, напрямую вызывает Python task lifecycle, пишет артефакты, а leaderboard
+submit делает только при `--leaderboard true` и успешном gate по результатам и
+лимиту времени.
+
+## Важное ограничение
+
+Это сильный code overfit под известные dev-задачи, без LLM и без обобщающего
+reasoning. Контраст с PAC1 prod остается главным индикатором: dev-результаты не
+доказывают переносимость на новые задачи.

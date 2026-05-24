@@ -24,7 +24,6 @@ def log(_message: str) -> None:
     return None
 
 
-
 def setup_adapter(env: str) -> BitgnAdapter:
     return BitgnAdapter(env=(env or "ecom").strip().lower())
 
@@ -33,26 +32,29 @@ def parse_tasks(value: str) -> list[str]:
     return [item.strip() for item in value.split(",") if item.strip()]
 
 
-def prepare_leaderboard(args: argparse.Namespace) -> int:
-    adapter = setup_adapter(args.env)
+def prepare_leaderboard_payload(env: str, tasks: list[str], run_name: str) -> dict[str, Any]:
+    adapter = setup_adapter(env)
     api_key = bitgn_api_key()
     if not api_key:
-        raise SystemExit("leaderboard mode requires BITGN_ECOM_API_KEY, BITGN_API_KEY, or ~/.bitgn/bitgn-api-key")
-    task_ids = parse_tasks(args.tasks)
-    if not task_ids:
-        raise SystemExit("prepare-leaderboard requires at least one task")
+        raise RuntimeError("leaderboard mode requires BITGN_ECOM_API_KEY, BITGN_API_KEY, or ~/.bitgn/bitgn-api-key")
+    if not tasks:
+        raise RuntimeError("prepare-leaderboard requires at least one task")
     client = HarnessServiceClientSync(os.getenv("BENCHMARK_HOST") or BITGN_URL)
-    run_name = args.run_name or os.getenv("BITGN_RUN_NAME") or "code-without-llm"
-    run = client.start_run(StartRunRequest(benchmark_id=adapter.benchmark_id, name=run_name, api_key=api_key))
+    final_name = run_name or os.getenv("BITGN_RUN_NAME") or "code-without-llm"
+    run = client.start_run(StartRunRequest(benchmark_id=adapter.benchmark_id, name=final_name, api_key=api_key))
     run_id = str(run.run_id)
     trial_ids = [str(item) for item in run.trial_ids]
-    if len(trial_ids) < len(task_ids):
-        raise SystemExit(f"leaderboard run {run_id} returned only {len(trial_ids)} trial ids for {len(task_ids)} tasks")
-    if args.env.startswith("pac1"):
-        seeds = prepare_trial_id_only_seeds(run_id, trial_ids, task_ids)
+    if len(trial_ids) < len(tasks):
+        raise RuntimeError(f"leaderboard run {run_id} returned only {len(trial_ids)} trial ids for {len(tasks)} tasks")
+    if env.startswith("pac1"):
+        seeds = prepare_trial_id_only_seeds(run_id, trial_ids, tasks)
     else:
-        seeds = prepare_trial_seeds(client, run_id, trial_ids, task_ids)
-    emit({"ok": True, "run_id": run_id, "run_name": run_name, "seeds": seeds})
+        seeds = prepare_trial_seeds(client, run_id, trial_ids, tasks)
+    return {"ok": True, "run_id": run_id, "run_name": final_name, "seeds": seeds}
+
+
+def prepare_leaderboard(args: argparse.Namespace) -> int:
+    emit(prepare_leaderboard_payload(args.env, parse_tasks(args.tasks), args.run_name))
     return 0
 
 
@@ -100,9 +102,8 @@ def prepare_trial_seeds(
             break
     missing = [task_id for task_id in task_ids if task_id not in seeds]
     if missing:
-        raise SystemExit(f"leaderboard run {run_id} did not include requested tasks: {', '.join(missing)}")
+        raise RuntimeError(f"leaderboard run {run_id} did not include requested tasks: {', '.join(missing)}")
     return seeds
-
 
 
 def prepare_trial_id_only_seeds(
@@ -111,17 +112,20 @@ def prepare_trial_id_only_seeds(
     task_ids: list[str],
 ) -> dict[str, dict[str, str]]:
     if len(trial_ids) < len(task_ids):
-        raise SystemExit("leaderboard run returned fewer trial ids than requested tasks")
-    seeds: dict[str, dict[str, str]] = {}
-    for task_id, trial_id in zip(task_ids, trial_ids):
-        seeds[task_id] = {"trial_id": trial_id, "task_id": task_id, "run_id": run_id}
-    return seeds
+        raise RuntimeError("leaderboard run returned fewer trial ids than requested tasks")
+    return {task_id: {"trial_id": trial_id, "task_id": task_id, "run_id": run_id} for task_id, trial_id in zip(task_ids, trial_ids)}
+
+
+def submit_leaderboard_payload(run_id: str) -> dict[str, Any]:
+    client = HarnessServiceClientSync(os.getenv("BENCHMARK_HOST") or BITGN_URL)
+    client.submit_run(SubmitRunRequest(run_id=run_id, force=True))
+    return {"ok": True, "run_id": run_id, "submitted": True}
+
 
 def submit_leaderboard(args: argparse.Namespace) -> int:
-    client = HarnessServiceClientSync(os.getenv("BENCHMARK_HOST") or BITGN_URL)
-    client.submit_run(SubmitRunRequest(run_id=args.run_id, force=True))
-    emit({"ok": True, "run_id": args.run_id, "submitted": True})
+    emit(submit_leaderboard_payload(args.run_id))
     return 0
+
 
 def start(args: argparse.Namespace) -> int:
     os.environ.setdefault("BENCHMARK_ID", "bitgn/ecom1-dev")
@@ -129,11 +133,11 @@ def start(args: argparse.Namespace) -> int:
     adapter = setup_adapter("ecom")
     client = HarnessServiceClientSync(os.getenv("BENCHMARK_HOST") or BITGN_URL)
     if args.leaderboard:
-        raise SystemExit("leaderboard mode is not implemented in the bridge yet")
+        raise SystemExit("leaderboard mode is not implemented in the bridge start command")
     trial = adapter.start_trial(client=client, task_id=args.task_id, trial_seed=None, api_key=bitgn_api_key(), log=log)
     ws = create_task_workspace(
         base_dir=args.artifact_dir,
-        benchmark_id=os.environ["BENCHMARK_ID"],
+        benchmark_id=adapter.benchmark_id,
         task_id=args.task_id,
         env="ecom",
         model="deterministic",
@@ -145,6 +149,7 @@ def start(args: argparse.Namespace) -> int:
     ws.write_json(ws.root / "bridge_trial.json", {"trial_id": trial.trial_id, "task_id": args.task_id, "started_at": now()})
     emit({"ok": True, "task_id": args.task_id, "trial_id": trial.trial_id, "workspace": str(ws.root), "instruction": trial.instruction})
     return 0
+
 
 def tool(args: argparse.Namespace) -> int:
     ws = open_task_workspace(args.workspace)
@@ -170,7 +175,6 @@ def finish(args: argparse.Namespace) -> int:
     return 0
 
 
-
 def autosolve(args: argparse.Namespace) -> int:
     ws = open_task_workspace(args.workspace)
     gateway = ToolGateway.from_workspace_context(ws)
@@ -179,35 +183,44 @@ def autosolve(args: argparse.Namespace) -> int:
     return 0
 
 
-def run_task(args: argparse.Namespace) -> int:
-    adapter = setup_adapter(args.env)
+def run_task_payload(
+    *,
+    env: str,
+    task_id: str,
+    run_id: str,
+    artifact_dir: str,
+    leaderboard: bool = False,
+    trial_seed: dict[str, Any] | str | None = None,
+) -> dict[str, Any]:
+    adapter = setup_adapter(env)
     client = HarnessServiceClientSync(os.getenv("BENCHMARK_HOST") or BITGN_URL)
-    trial_seed = json.loads(args.trial_seed) if args.trial_seed else None
-    if args.leaderboard and trial_seed is None:
-        raise SystemExit("leaderboard run-task requires --trial-seed")
-    if args.leaderboard and trial_seed and not trial_seed.get("harness_url"):
-        raw_trial = client.start_trial(StartTrialRequest(trial_id=str(trial_seed["trial_id"])))
+    seed = normalize_trial_seed(trial_seed)
+    if leaderboard and seed is None:
+        raise RuntimeError("leaderboard run-task requires trial seed")
+    if leaderboard and seed and not seed.get("harness_url"):
+        raw_trial = client.start_trial(StartTrialRequest(trial_id=str(seed["trial_id"])))
         actual_task_id = str(raw_trial.task_id)
-        trial = adapter.start_trial(client=client, task_id=actual_task_id, trial_seed={"trial_id": str(raw_trial.trial_id), "harness_url": str(raw_trial.harness_url), "instruction": str(raw_trial.instruction)}, api_key=bitgn_api_key(), log=log)
+        hydrated_seed = {"trial_id": str(raw_trial.trial_id), "harness_url": str(raw_trial.harness_url), "instruction": str(raw_trial.instruction)}
+        trial = adapter.start_trial(client=client, task_id=actual_task_id, trial_seed=hydrated_seed, api_key=bitgn_api_key(), log=log)
     else:
-        actual_task_id = args.task_id
-        trial = adapter.start_trial(client=client, task_id=args.task_id, trial_seed=trial_seed, api_key=bitgn_api_key(), log=log)
-    runtime_env = "pac1" if args.env.startswith("pac1") else args.env
+        actual_task_id = task_id
+        trial = adapter.start_trial(client=client, task_id=task_id, trial_seed=seed, api_key=bitgn_api_key(), log=log)
+    runtime_env = "pac1" if env.startswith("pac1") else env
     ws = create_task_workspace(
-        base_dir=args.artifact_dir,
-        benchmark_id=os.environ["BENCHMARK_ID"],
+        base_dir=artifact_dir,
+        benchmark_id=adapter.benchmark_id,
         task_id=actual_task_id,
         env=runtime_env,
         model="deterministic",
-        local_run_id=args.run_id,
+        local_run_id=run_id,
     )
     started = time.monotonic()
     ws.instruction_path.write_text(trial.instruction + "\n", encoding="utf-8")
-    adapter.write_context(workspace=ws, task_id=actual_task_id, run_id=args.run_id, harness_url=trial.harness_url)
+    adapter.write_context(workspace=ws, task_id=actual_task_id, run_id=run_id, harness_url=trial.harness_url)
     gateway = adapter.create_gateway(harness_url=trial.harness_url, workspace=ws, task_id=actual_task_id)
     adapter.hydrate_workspace(workspace=ws, instruction=trial.instruction)
     ws.write_json(ws.root / "bridge_trial.json", {"trial_id": trial.trial_id, "task_id": actual_task_id, "started_at": now()})
-    if args.env.startswith("pac1"):
+    if env.startswith("pac1"):
         report = Pac1DeterministicSolver(gateway, trial.instruction, actual_task_id).solve()
     else:
         report = EcomDeterministicSolver(gateway, trial.instruction).solve()
@@ -221,7 +234,7 @@ def run_task(args: argparse.Namespace) -> int:
     detail = [str(item) for item in result.score_detail]
     wall_seconds = time.monotonic() - started
     ws.write_json(ws.score_path, {"score": score, "passed": score == 1.0, "score_detail": detail, "ts": now(), "wall_seconds": wall_seconds})
-    emit({
+    return {
         "ok": True,
         "task_id": actual_task_id,
         "passed": score == 1.0,
@@ -231,7 +244,20 @@ def run_task(args: argparse.Namespace) -> int:
         "error": None,
         "score_detail": detail,
         "wall_seconds": wall_seconds,
-    })
+    }
+
+
+def normalize_trial_seed(seed: dict[str, Any] | str | None) -> dict[str, Any] | None:
+    if seed is None or seed == "":
+        return None
+    if isinstance(seed, str):
+        return json.loads(seed)
+    return seed
+
+
+def run_task(args: argparse.Namespace) -> int:
+    seed = json.loads(args.trial_seed) if args.trial_seed else None
+    emit(run_task_payload(env=args.env, task_id=args.task_id, run_id=args.run_id, artifact_dir=args.artifact_dir, leaderboard=args.leaderboard, trial_seed=seed))
     return 0
 
 

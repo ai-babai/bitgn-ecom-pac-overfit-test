@@ -2,18 +2,17 @@
 
 ## Done
 
-- Created Rust clean-room runner skeleton.
-- Connected non-leaderboard ECOM task start, tool calls, completion, and finish through a bridge.
-- Added configurable CLI for run id, version, leaderboard flag, fail-fast, workers, tasks, artifact dir, and enabled rules.
-- Added deterministic catalogue parser and solver for first catalogue presence and support-note claim tasks.
-- Added parallel task execution for independent tasks.
-- Added versionable starter rules and code-limit guardrail.
-- Verified five selected ECOM tasks pass without LLM calls.
+- Moved the outer runner from Rust wrapper plus Python bridge to a Python-only CLI.
+- Preserved configurable run id, version, leaderboard flag, fail-fast, workers, tasks, artifact dir, and enabled rules.
+- Preserved parallel task execution for independent tasks.
+- Preserved run artifacts: `run_config.json`, `run_manifest.jsonl`, `run_summary.json`, per-task workspace artifacts, submissions, scores, and tool logs.
+- Verified ECOM dev: `44/44` without leaderboard on run `python-only-ecom-dev-001`.
+- Verified PAC1 dev: `43/43` without leaderboard on run `python-only-pac1-dev-001`.
+- Documented Python-only timing and comparison with the previous Rust-wrapper baseline.
 
 ## Next
 
-- Add deterministic solvers for inventory/store availability tasks.
-- Add checkout, discount, payment, return, and security-policy task families.
+- Decide whether this branch should replace the Rust-wrapper mainline or stay as an experiment.
+- If it becomes mainline, refactor large solver modules into smaller task-family modules.
 - Add richer gate reports into artifacts, not only pre-submit validation.
-- Replace the Python bridge with direct Rust integration where the BitGN API boundary is stable.
-- Expand regression runs by task class after each new solver family.
+- Keep regression measurements split by benchmark and by dev/prod visibility.

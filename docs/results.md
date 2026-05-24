@@ -1,27 +1,33 @@
 # Benchmark Results
 
-Latest saved measurements for this repository.
+Latest measurements for the Python-only runner branch. All rows below are local
+DEV verification runs without leaderboard submission.
 
-| Benchmark | Env | Run id | Tasks | Result | Workers | Leaderboard | Wall sum |
+## Python-Only vs Rust Wrapper Baseline
+
+| Benchmark | Runner | Run id | Tasks | Result | Workers | Leaderboard | Wall sum |
 | --- | --- | --- | ---: | ---: | ---: | --- | ---: |
-| `pac1_dev` | dev | `decouple-pac1-dev-001` | 43 | `43/43` | 10 | yes | `89.142s` local |
-| `ecom1_dev` | dev | `decouple-ecom-dev-002` | 44 | `44/44` | 10 | yes | `48.020s` local; `0:23` leaderboard |
-| `pac1_prod` | prod blind | `pac1-prod-blind-003` | 104 | `20/104` | 10 | no | `184.323s` |
+| `ecom1_dev` | Rust wrapper baseline | `decouple-ecom-dev-002` | 44 | `44/44` | 10 | no local, yes artifact | `48.020s` |
+| `ecom1_dev` | Python-only | `python-only-ecom-dev-001` | 44 | `44/44` | 10 | no | `49.344s` |
+| `pac1_dev` | Rust wrapper baseline | `decouple-pac1-dev-001` | 43 | `43/43` | 10 | no local, yes artifact | `89.142s` |
+| `pac1_dev` | Python-only | `python-only-pac1-dev-001` | 43 | `43/43` | 10 | no | `89.099s` |
 
+Python-only keeps the same pass counts. PAC1 is effectively unchanged
+(`-0.043s` task wall sum), while ECOM is `+1.324s` slower than the Rust-wrapper
+baseline.
 
 ## Timing Snapshot
 
-Measured from the latest local dev runs without leaderboard submission for dev suites that already have successful leaderboard artifacts. `Task wall` is the sum of per-task `wall_seconds`. Tool stages come from `tool_calls.jsonl`; `Overhead` is the remaining task wall time: local solver work, artifact I/O, trial close, and scoring.
+`Task wall` is the sum of per-task `wall_seconds`. Tool stages come from
+`tool_calls.jsonl`; `Overhead` is the remaining task wall time: local solver work,
+artifact I/O, trial close, and scoring.
 
 | Benchmark | Run id | Tasks | Workers | Task wall sum | Avg task | Median | P95 | Tool calls sum | Read/search stage | Action stage | Completion stage | Overhead |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `ecom1_dev` | `decouple-ecom-dev-002` | 44 | 10 | `48.020s` | `1.091s` | `0.569s` | `1.312s` | `32.870s` | `11.740s` | `19.108s` | `2.022s` | `15.150s` |
-| `pac1_dev` | `decouple-pac1-dev-001` | 43 | 10 | `89.142s` | `2.073s` | `1.523s` | `4.523s` | `86.056s` | `77.463s` | `4.142s` | `4.451s` | `3.086s` |
-
-For ECOM, the observed tool window was about `65.856s`, which is larger than task wall sum because trial startup and part of queueing are not included in `wall_seconds` yet. For PAC1, the observed tool window was about `16.655s` because work was spread across 10 worker threads.
+| `ecom1_dev` | `python-only-ecom-dev-001` | 44 | 10 | `49.344s` | `1.121s` | `0.658s` | `1.406s` | `34.340s` | `12.734s` | `19.171s` | `2.435s` | `15.004s` |
+| `pac1_dev` | `python-only-pac1-dev-001` | 43 | 10 | `89.099s` | `2.072s` | `1.498s` | `4.743s` | `85.664s` | `77.458s` | `3.903s` | `4.303s` | `3.435s` |
 
 Notes:
-- For dev rows, `Leaderboard=yes` means there is a successful leaderboard artifact; timing still comes from the latest local verification run without submission.
-- PAC1 prod is a blind run over `t000..t103` without leaderboard submission.
+
 - `runs/` is intentionally gitignored; this file preserves the committed summary.
-- The large dev/prod gap is expected for this code-only overfit experiment.
+- The solution is a code-only overfit experiment. DEV success does not prove transfer to unseen tasks.
