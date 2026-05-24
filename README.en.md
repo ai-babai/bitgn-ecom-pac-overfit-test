@@ -106,6 +106,14 @@ Main flow: the Python CLI reads run configuration, schedules tasks across worker
 threads, calls the Python task lifecycle directly, writes artifacts, and submits
 to leaderboard only when `--leaderboard true` is enabled and result/time gates pass.
 
+## Files Of Interest
+
+To inspect the accumulated heuristics, rules, and task instructions that currently drive solving, start here:
+
+- [tools/ecom_solver.py](tools/ecom_solver.py) - deterministic solver for ECOM tasks.
+- [tools/pac1_solver.py](tools/pac1_solver.py) - deterministic solver for PAC1 tasks.
+- [tools/bitgn_runtime.py](tools/bitgn_runtime.py) - shared BitGN tool gateway and artifact writer.
+
 ## Important Limitation
 
 This is a strong code overfit to known dev tasks, with no LLM calls and no general
