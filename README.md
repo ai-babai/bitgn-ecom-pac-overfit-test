@@ -56,9 +56,9 @@ uv run python -m bitgn_run.cli run \
 | --- | --- | --- | ---: | ---: | ---: | --- | ---: |
 | `ecom1_dev` | dev | `leaderboard-ecom-dev-eniki-beniki-v007` | 44 | `44/44` | 10 | yes | `30.181s` |
 | `pac1_dev` | dev | `leaderboard-pac1-dev-eniki-beniki-v007` | 43 | `43/43` | 10 | yes | `93.619s` |
-| `pac1_prod` | prod blind | `pac1-prod-blind-eniki-beniki-v007` | 104 | `21/104` | 10 | no | `92.666s` |
+| `pac1_prod` | prod blind | `pac1-prod-blind-public-verify-001` | 104 | `20/104` | 10 | no | `96.249s` |
 
-Для dev-строк `Leaderboard=yes` означает, что это свежие leaderboard-прогоны с именем `[@skifmax]-[code-without-llm]-[eniki-beniki]-[v007]`. `pac1_prod` - слепой прогон без leaderboard.
+Для dev-строк `Leaderboard=yes` означает, что это свежие leaderboard-прогоны с именем `[@skifmax]-[code-without-llm]-[eniki-beniki]-[v007]`. `pac1_prod` - слепой прогон без leaderboard. Для последнего `pac1_prod` реальное elapsed-время запуска с 10 workers: `11.901s`; `Wall sum` - сумма времени по задачам.
 
 ## Срез времени Python-only
 
@@ -66,7 +66,7 @@ uv run python -m bitgn_run.cli run \
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | `ecom1_dev` | `leaderboard-ecom-dev-eniki-beniki-v007` | 44 | 10 | `30.181s` | `0.686s` | `0.417s` | `1.081s` | `21.985s` | `9.280s` | `11.347s` | `1.358s` | `8.196s` |
 | `pac1_dev` | `leaderboard-pac1-dev-eniki-beniki-v007` | 43 | 10 | `93.619s` | `2.177s` | `1.532s` | `4.733s` | `89.348s` | `80.916s` | `4.025s` | `4.407s` | `4.271s` |
-| `pac1_prod` | `pac1-prod-blind-eniki-beniki-v007` | 104 | 10 | `92.666s` | `0.891s` | `0.570s` | `1.685s` | `85.058s` | `74.438s` | `0.000s` | `10.620s` | `7.608s` |
+| `pac1_prod` | `pac1-prod-blind-public-verify-001` | 104 | 10 | `96.249s` | `0.925s` | `0.554s` | `1.761s` | `87.270s` | `76.401s` | `0.000s` | `10.869s` | `8.979s` |
 
 ## Архитектура
 
