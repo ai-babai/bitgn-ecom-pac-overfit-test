@@ -30,7 +30,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Verify the local setup:
 cargo test
-uv run python -m py_compile tools/bitgn_bridge.py tools/bitgn_runtime.py tools/pac1_solver.py
+uv run python -m py_compile tools/bitgn_bridge.py tools/bitgn_runtime.py tools/ecom_solver.py tools/pac1_solver.py
 scripts/check_code_limits.py
 ```
 
@@ -44,15 +44,18 @@ print or commit secrets.
 
 | Benchmark | Env | Run id | Tasks | Result | Workers | Leaderboard | Wall sum |
 | --- | --- | --- | ---: | ---: | ---: | --- | ---: |
-| `pac1_dev` | dev | `decouple-pac1-dev-001` | 43 | `43/43` | 10 | no | `89.142s` local |
+| `pac1_dev` | dev | `decouple-pac1-dev-001` | 43 | `43/43` | 10 | yes | `89.142s` local |
 | `ecom1_dev` | dev | `decouple-ecom-dev-002` | 44 | `44/44` | 10 | yes | `48.020s` local; `0:23` leaderboard |
 | `pac1_prod` | prod blind | `pac1-prod-blind-003` | 104 | `20/104` | 10 | no | `184.323s` |
 
-PAC1 prod was a blind run over `t000..t103` without leaderboard submission.
+For dev rows, `Leaderboard=yes` means this benchmark has a successful leaderboard
+artifact; `Run id` and timing show the latest local verification run without
+submission. PAC1 prod was a blind run over `t000..t103` without leaderboard
+submission.
 
 ## Timing Snapshot
 
-Measured from the latest local dev runs without leaderboard submission. `Task wall` is the sum of per-task `wall_seconds`. Tool stages come from `tool_calls.jsonl`; `Overhead` is the remaining task wall time: local solver work, artifact I/O, trial close, and scoring.
+Measured from the latest local dev runs without leaderboard submission for dev suites that already have successful leaderboard artifacts. `Task wall` is the sum of per-task `wall_seconds`. Tool stages come from `tool_calls.jsonl`; `Overhead` is the remaining task wall time: local solver work, artifact I/O, trial close, and scoring.
 
 | Benchmark | Run id | Tasks | Workers | Task wall sum | Avg task | Median | P95 | Tool calls sum | Read/search stage | Action stage | Completion stage | Overhead |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -81,8 +84,9 @@ bitgn-ecom-run
 │   ├── artifacts.rs   # run_config, manifest, summary artifacts
 │   └── types.rs       # TaskResult contract
 ├── tools/
-│   ├── bitgn_bridge.py  # CLI bridge and ECOM deterministic solver
+│   ├── bitgn_bridge.py  # Python CLI bridge between Rust and BitGN runtime
 │   ├── bitgn_runtime.py # local BitGN API client, adapters, gateway, workspace
+│   ├── ecom_solver.py   # ECOM deterministic solver
 │   └── pac1_solver.py   # PAC1 deterministic solver
 ├── rules/              # rule selector names passed into run config
 └── scripts/            # local quality checks
@@ -97,6 +101,16 @@ Main flow:
    deterministic solver for the benchmark env, reports completion, and closes the trial.
 5. Rust collects `TaskResult`, writes artifacts, and submits to leaderboard only
    when `--leaderboard true` is enabled and all gates pass.
+
+## Why Rust
+
+Rust currently owns the outer runner: CLI configuration, task lists, worker
+threads, fail-fast behavior, artifacts, `TaskResult` aggregation, and the gate
+before leaderboard submission. Solver logic remains in Python because the BitGN
+generated packages and runtime API are currently consumed from Python. If the
+separate orchestration layer stops paying for itself, the project can be
+simplified to a Python CLI; for now Rust provides a typed wrapper and parallel
+execution.
 
 ## Benchmark Switch
 
@@ -155,7 +169,7 @@ cargo run -- run \
 ## Checks
 
 ```bash
-uv run python -m py_compile tools/bitgn_bridge.py tools/bitgn_runtime.py tools/pac1_solver.py
+uv run python -m py_compile tools/bitgn_bridge.py tools/bitgn_runtime.py tools/ecom_solver.py tools/pac1_solver.py
 cargo fmt -- --check
 cargo test
 scripts/check_code_limits.py
