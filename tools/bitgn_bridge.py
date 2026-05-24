@@ -16,7 +16,7 @@ NATIVE = ROOT / "reference" / "bitgn-ecom-localbench-env" / "codex-agent-native"
 sys.path.insert(0, str(NATIVE))
 
 from bitgn.harness_connect import HarnessServiceClientSync  # type: ignore  # noqa: E402
-from bitgn.harness_pb2 import EndTrialRequest, StartTrialRequest, SubmitRunRequest  # type: ignore  # noqa: E402
+from bitgn.harness_pb2 import EndTrialRequest, StartRunRequest, StartTrialRequest, SubmitRunRequest  # type: ignore  # noqa: E402
 from adapters.ecom import EcomAdapter  # type: ignore  # noqa: E402
 from adapters.pac1 import Pac1LikeAdapter  # type: ignore  # noqa: E402
 from config import BITGN_URL  # type: ignore  # noqa: E402
@@ -56,7 +56,7 @@ def parse_tasks(value: str) -> list[str]:
 
 def prepare_leaderboard(args: argparse.Namespace) -> int:
     adapter = setup_adapter(args.env)
-    api_key = adapter._api_key()
+    api_key = bitgn_api_key()
     if not api_key:
         raise SystemExit("leaderboard mode requires BITGN_ECOM_API_KEY, BITGN_API_KEY, or ~/.bitgn/bitgn-api-key")
     task_ids = parse_tasks(args.tasks)
@@ -64,16 +64,62 @@ def prepare_leaderboard(args: argparse.Namespace) -> int:
         raise SystemExit("prepare-leaderboard requires at least one task")
     client = HarnessServiceClientSync(os.getenv("BENCHMARK_HOST") or BITGN_URL)
     run_name = args.run_name or os.getenv("BITGN_RUN_NAME") or "code-without-llm"
-    run = adapter._start_run(client=client, api_key=api_key, name=run_name, log=log)
+    run = client.start_run(StartRunRequest(benchmark_id=adapter.benchmark_id, name=run_name, api_key=api_key))
     run_id = str(run.run_id)
     trial_ids = [str(item) for item in run.trial_ids]
     if len(trial_ids) < len(task_ids):
         raise SystemExit(f"leaderboard run {run_id} returned only {len(trial_ids)} trial ids for {len(task_ids)} tasks")
-    seeds: dict[str, dict[str, str]] = {}
-    for task_id, trial_id in zip(task_ids, trial_ids):
-        seeds[task_id] = {"trial_id": trial_id, "run_id": run_id}
+    seeds = prepare_trial_seeds(client, run_id, trial_ids, task_ids)
     emit({"ok": True, "run_id": run_id, "run_name": run_name, "seeds": seeds})
     return 0
+
+
+def bitgn_api_key() -> str:
+    for name in ["BITGN_ECOM_API_KEY", "BITGN_API_KEY"]:
+        raw = (os.getenv(name) or "").strip()
+        if raw:
+            return raw
+    for name in ["BITGN_ECOM_API_KEY_FILE", "BITGN_API_KEY_FILE"]:
+        raw_path = (os.getenv(name) or "").strip()
+        if raw_path:
+            value = read_secret_file(Path(raw_path).expanduser())
+            if value:
+                return value
+    return read_secret_file(Path.home() / ".bitgn" / "bitgn-api-key")
+
+
+def read_secret_file(path: Path) -> str:
+    if path.exists() and path.is_file():
+        return path.read_text(encoding="utf-8").strip()
+    return ""
+
+
+def prepare_trial_seeds(
+    client: HarnessServiceClientSync,
+    run_id: str,
+    trial_ids: list[str],
+    task_ids: list[str],
+) -> dict[str, dict[str, str]]:
+    requested = set(task_ids)
+    seeds: dict[str, dict[str, str]] = {}
+    for trial_id in trial_ids:
+        trial = client.start_trial(StartTrialRequest(trial_id=trial_id))
+        task_id = str(trial.task_id)
+        if task_id not in requested or task_id in seeds:
+            continue
+        seeds[task_id] = {
+            "trial_id": str(trial.trial_id),
+            "task_id": task_id,
+            "instruction": str(trial.instruction),
+            "harness_url": str(trial.harness_url),
+            "run_id": run_id,
+        }
+        if len(seeds) == len(requested):
+            break
+    missing = [task_id for task_id in task_ids if task_id not in seeds]
+    if missing:
+        raise SystemExit(f"leaderboard run {run_id} did not include requested tasks: {', '.join(missing)}")
+    return seeds
 
 
 def submit_leaderboard(args: argparse.Namespace) -> int:

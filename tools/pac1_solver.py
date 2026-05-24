@@ -21,6 +21,7 @@ class Pac1DeterministicSolver:
         self.task_id = task_id
         self.step = 0
         self.read_refs: list[str] = []
+        self.read_cache: dict[str, str] = {}
 
     def solve(self) -> dict[str, Any]:
         text = self.instruction
@@ -71,14 +72,18 @@ class Pac1DeterministicSolver:
 
     def read(self, path: str) -> str:
         clean = clean_path(path)
+        if clean in self.read_cache:
+            return self.read_cache[clean]
         try:
             result = self.call("read", {"path": clean})
         except Exception:
             return ""
         actual = clean_path(str(result.get("path") or clean))
+        content = str(result.get("content") or "")
+        self.read_cache[actual] = content
         if actual not in self.read_refs:
             self.read_refs.append(actual)
-        return str(result.get("content") or "")
+        return content
 
     def read_json(self, path: str) -> dict[str, Any]:
         try:
@@ -87,10 +92,14 @@ class Pac1DeterministicSolver:
             return {}
 
     def write(self, path: str, content: str) -> None:
-        self.call("write", {"path": clean_path(path), "content": content})
+        clean = clean_path(path)
+        self.read_cache.pop(clean, None)
+        self.call("write", {"path": clean, "content": content})
 
     def delete(self, path: str) -> None:
-        self.call("delete", {"path": clean_path(path)})
+        clean = clean_path(path)
+        self.read_cache.pop(clean, None)
+        self.call("delete", {"path": clean})
 
     def mkdir(self, path: str) -> None:
         self.call("mkdir", {"path": clean_path(path)})
@@ -318,8 +327,11 @@ class Pac1DeterministicSolver:
             return self.finish("Need clarification before selecting a captured article.", CLARIFY, ["AGENTS.md"])
         day_match = re.search(r"(\d+)\s+days(?: ago)?", self.instruction, re.I)
         days = int(day_match.group(1)) if day_match else 0
-        self.call("context", {})
-        anchor = date(2026, 3, 26)
+        ctx = self.call("context", {})
+        try:
+            anchor = datetime.fromisoformat(str(ctx.get("time", "")).replace("Z", "+00:00")).date()
+        except Exception:
+            anchor = date(2026, 3, 26)
         target_date_value = anchor - timedelta(days=days)
         target = target_date_value.isoformat()
         matches = []

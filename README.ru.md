@@ -60,9 +60,10 @@ Leaderboard submit включается только явно через `--lead
 | Benchmark | Run id | Tasks | Result | Workers | Leaderboard | Wall sum |
 | --- | --- | ---: | ---: | ---: | --- | ---: |
 | ECOM dev | `main-ecom-dev-001` | 44 | `44/44` | 10 | no | `58.203s` |
-| PAC1 dev | `pac1-dev-speed-003` | 43 | `43/43` | 10 | no | `141.315s` |
+| PAC1 dev | `pac1-dev-cache-speed-001` | 43 | `43/43` | 10 | no | `131.381s` |
 | PAC1 prod blind | `pac1-prod-blind-002` | 104 | `20/104` | 10 | no | `182.606s` |
 | ECOM leaderboard | `leaderboard-shmygolet-v006-002` | 44 | `44/44` | 10 | yes | `26.412s` local, `0:23` leaderboard |
+| PAC1 leaderboard | `pac1-leaderboard-shmygolet-v006-004` | 43 | `43/43` | 10 | yes | `153.474s` local |
 
 ECOM leaderboard name: `[@skifmax]-[code-without-llm]-[shmygolet]-[v006]`.
 PAC1 prod был слепым прогоном по `t000..t103`; строка фиксирует результат этого
