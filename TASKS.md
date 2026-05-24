@@ -2,7 +2,7 @@
 
 ## Done
 
-- Moved the outer runner from Rust wrapper plus Python bridge to a Python-only CLI.
+- Moved the outer runner from mixed Rust/Python orchestration to a single-language Python CLI.
 - Preserved configurable run id, version, leaderboard flag, fail-fast, workers, tasks, artifact dir, and enabled rules.
 - Preserved parallel task execution for independent tasks.
 - Preserved run artifacts: `run_config.json`, `run_manifest.jsonl`, `run_summary.json`, per-task workspace artifacts, submissions, scores, and tool logs.

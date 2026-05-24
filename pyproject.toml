@@ -1,7 +1,7 @@
 [project]
-name = "bitgn-ecom-run"
+name = "bitgn-ecom-pac-lab"
 version = "0.1.0"
-description = "Clean-room BitGN ECOM/PAC code-only runner"
+description = "Experimental BitGN ECOM/PAC benchmark lab"
 readme = "README.md"
 requires-python = ">=3.14,<3.15"
 dependencies = [

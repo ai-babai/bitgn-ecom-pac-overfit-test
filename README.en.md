@@ -1,10 +1,8 @@
-# bitgn-ecom-run
+# bitgn-ecom-pac-lab
 
 [Русский](README.ru.md)
 
-`bitgn-ecom-run` is a code-only BitGN runner for ECOM/PAC1. The main version is
-now Python-only: tasks are solved by deterministic algorithms, with no LLM calls
-and no Rust wrapper.
+`bitgn-ecom-pac-lab` is an experimental lab for BitGN ECOM/PAC1 benchmarks. The project explores different strategies for solving benchmark tasks; the current main strategy uses pre-written deterministic code without AI/LLM calls during task execution.
 
 ## Installation
 
@@ -16,7 +14,7 @@ Requirements:
 - A BitGN API key is required for ECOM and explicitly enabled leaderboard runs.
 
 ```bash
-cd bitgn-ecom-run
+cd bitgn-ecom-pac-lab
 curl -LsSf https://astral.sh/uv/install.sh | sh
 uv sync
 uv run python -m py_compile bitgn_run/*.py tools/*.py
@@ -29,21 +27,42 @@ ECOM dev:
 
 ```bash
 TASKS=$(printf 't%02d,' $(seq 1 44)); TASKS=${TASKS%,}
-uv run python -m bitgn_run.cli run   --env ecom   --run-id ecom-dev-local   --leaderboard false   --fail-fast false   --workers 10   --tasks "$TASKS"   --artifact-dir runs
+uv run python -m bitgn_run.cli run \
+  --env ecom \
+  --run-id ecom-dev-local \
+  --leaderboard false \
+  --fail-fast false \
+  --workers 10 \
+  --tasks "$TASKS" \
+  --artifact-dir runs
 ```
 
 PAC1 dev:
 
 ```bash
 TASKS=$(printf 't%02d,' $(seq 1 43)); TASKS=${TASKS%,}
-uv run python -m bitgn_run.cli run   --env pac1   --run-id pac1-dev-local   --leaderboard false   --fail-fast false   --workers 10   --tasks "$TASKS"   --artifact-dir runs
+uv run python -m bitgn_run.cli run \
+  --env pac1 \
+  --run-id pac1-dev-local \
+  --leaderboard false \
+  --fail-fast false \
+  --workers 10 \
+  --tasks "$TASKS" \
+  --artifact-dir runs
 ```
 
 PAC1 prod blind:
 
 ```bash
 TASKS=$(printf 't%03d,' $(seq 0 103)); TASKS=${TASKS%,}
-uv run python -m bitgn_run.cli run   --env pac1-prod   --run-id pac1-prod-blind-local   --leaderboard false   --fail-fast false   --workers 10   --tasks "$TASKS"   --artifact-dir runs
+uv run python -m bitgn_run.cli run \
+  --env pac1-prod \
+  --run-id pac1-prod-blind-local \
+  --leaderboard false \
+  --fail-fast false \
+  --workers 10 \
+  --tasks "$TASKS" \
+  --artifact-dir runs
 ```
 
 ## Python-Only Results
@@ -70,7 +89,7 @@ leaderboard.
 ## Architecture
 
 ```text
-bitgn-ecom-run
+bitgn-ecom-pac-lab
 ├── bitgn_run/
 │   ├── cli.py        # CLI entrypoint
 │   ├── config.py     # env/tasks/workers/leaderboard/fail-fast/run limits

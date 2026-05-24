@@ -1,4 +1,4 @@
-# bitgn-ecom-run Index
+# bitgn-ecom-pac-lab Index
 
 Clean-room deterministic BitGN ECOM/PAC runner.
 

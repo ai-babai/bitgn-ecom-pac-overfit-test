@@ -25,7 +25,7 @@ class RunConfig:
 
 
 def config_from_args(argv: list[str] | None = None) -> RunConfig:
-    parser = argparse.ArgumentParser(prog="bitgn-ecom-run")
+    parser = argparse.ArgumentParser(prog="bitgn-ecom-pac-lab")
     sub = parser.add_subparsers(dest="command", required=True)
     run = sub.add_parser("run")
     run.add_argument("--run-id", default=f"det-{int(time.time())}")

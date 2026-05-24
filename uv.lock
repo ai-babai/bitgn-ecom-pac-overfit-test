@@ -39,7 +39,7 @@ wheels = [
 ]
 
 [[package]]
-name = "bitgn-ecom-run"
+name = "bitgn-ecom-pac-lab"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
