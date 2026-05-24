@@ -19,7 +19,7 @@
 ### Быстрый старт
 
 ```bash
-cd /srv/aika-os/bitgn/code/bitgn-ecom-run
+cd bitgn-ecom-run
 
 # Если Rust еще не установлен:
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
@@ -49,6 +49,17 @@ Leaderboard submit включается только явно через `--lead
 | `pac1_prod` | prod blind | `pac1-prod-blind-003` | 104 | `20/104` | 10 | no | `184.323s` |
 
 PAC1 prod был слепым прогоном по `t000..t103` без leaderboard submit.
+
+## Срез времени
+
+Замер снят по последним локальным dev-прогонам без leaderboard submit. `Task wall` - сумма `wall_seconds` по задачам. Tool-этапы считаются из `tool_calls.jsonl`; `Overhead` - остаток внутри task wall: локальный solver, файловые артефакты, закрытие trial и scoring.
+
+| Benchmark | Run id | Tasks | Workers | Task wall sum | Avg task | Median | P95 | Tool calls sum | Read/search stage | Action stage | Completion stage | Overhead |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `ecom1_dev` | `decouple-ecom-dev-002` | 44 | 10 | `48.020s` | `1.091s` | `0.569s` | `1.312s` | `32.870s` | `11.740s` | `19.108s` | `2.022s` | `15.150s` |
+| `pac1_dev` | `decouple-pac1-dev-001` | 43 | 10 | `89.142s` | `2.073s` | `1.523s` | `4.523s` | `86.056s` | `77.463s` | `4.142s` | `4.451s` | `3.086s` |
+
+Для ECOM видимый tool-window был около `65.856s`, что больше task wall sum: старт trials и часть очереди сейчас не входят в `wall_seconds`. Для PAC1 видимый tool-window был около `16.655s`, потому что задачи реально легли на 10 worker-потоков.
 
 ### Важное ограничение
 
