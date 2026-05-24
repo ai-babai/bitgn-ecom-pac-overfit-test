@@ -69,22 +69,19 @@ uv run python -m bitgn_run.cli run \
 
 | Benchmark | Env | Run id | Tasks | Result | Workers | Leaderboard | Wall sum |
 | --- | --- | --- | ---: | ---: | ---: | --- | ---: |
-| `ecom1_dev` | dev | `python-only-ecom-dev-001` | 44 | `44/44` | 10 | yes | `49.344s` |
-| `pac1_dev` | dev | `python-only-pac1-dev-001` | 43 | `43/43` | 10 | yes | `89.099s` |
-| `pac1_prod` | prod blind | `python-only-pac1-prod-001` | 104 | `20/104` | 10 | no | `92.760s` |
+| `ecom1_dev` | dev | `leaderboard-ecom-dev-eniki-beniki-v007` | 44 | `44/44` | 10 | yes | `30.181s` |
+| `pac1_dev` | dev | `leaderboard-pac1-dev-eniki-beniki-v007` | 43 | `43/43` | 10 | yes | `93.619s` |
+| `pac1_prod` | prod blind | `pac1-prod-blind-eniki-beniki-v007` | 104 | `21/104` | 10 | no | `92.666s` |
 
-For dev rows, `Leaderboard=yes` means this benchmark has a leaderboard artifact.
-The listed `Run id` and `Wall sum` are from the latest local Python-only
-verification runs without submission. `pac1_prod` is a blind run without
-leaderboard.
+For dev rows, `Leaderboard=yes` means these are fresh leaderboard runs named `[@skifmax]-[code-without-llm]-[eniki-beniki]-[v007]`. `pac1_prod` is a blind run without leaderboard.
 
 ## Python-Only Timing Snapshot
 
 | Benchmark | Run id | Tasks | Workers | Task wall sum | Avg task | Median | P95 | Tool calls sum | Read/search stage | Action stage | Completion stage | Overhead |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `ecom1_dev` | `python-only-ecom-dev-001` | 44 | 10 | `49.344s` | `1.121s` | `0.658s` | `1.406s` | `34.340s` | `12.734s` | `19.171s` | `2.435s` | `15.004s` |
-| `pac1_dev` | `python-only-pac1-dev-001` | 43 | 10 | `89.099s` | `2.072s` | `1.498s` | `4.743s` | `85.664s` | `77.458s` | `3.903s` | `4.303s` | `3.435s` |
-| `pac1_prod` | `python-only-pac1-prod-001` | 104 | 10 | `92.760s` | `0.892s` | `0.526s` | `1.675s` | `84.788s` | `74.088s` | `0.000s` | `10.700s` | `7.972s` |
+| `ecom1_dev` | `leaderboard-ecom-dev-eniki-beniki-v007` | 44 | 10 | `30.181s` | `0.686s` | `0.417s` | `1.081s` | `21.985s` | `9.280s` | `11.347s` | `1.358s` | `8.196s` |
+| `pac1_dev` | `leaderboard-pac1-dev-eniki-beniki-v007` | 43 | 10 | `93.619s` | `2.177s` | `1.532s` | `4.733s` | `89.348s` | `80.916s` | `4.025s` | `4.407s` | `4.271s` |
+| `pac1_prod` | `pac1-prod-blind-eniki-beniki-v007` | 104 | 10 | `92.666s` | `0.891s` | `0.570s` | `1.685s` | `85.058s` | `74.438s` | `0.000s` | `10.620s` | `7.608s` |
 
 ## Architecture
 
