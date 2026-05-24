@@ -69,7 +69,10 @@ def prepare_leaderboard(args: argparse.Namespace) -> int:
     trial_ids = [str(item) for item in run.trial_ids]
     if len(trial_ids) < len(task_ids):
         raise SystemExit(f"leaderboard run {run_id} returned only {len(trial_ids)} trial ids for {len(task_ids)} tasks")
-    seeds = prepare_trial_seeds(client, run_id, trial_ids, task_ids)
+    if args.env.startswith("pac1"):
+        seeds = prepare_lazy_trial_seeds(run_id, trial_ids, task_ids)
+    else:
+        seeds = prepare_trial_seeds(client, run_id, trial_ids, task_ids)
     emit({"ok": True, "run_id": run_id, "run_name": run_name, "seeds": seeds})
     return 0
 
@@ -121,6 +124,19 @@ def prepare_trial_seeds(
         raise SystemExit(f"leaderboard run {run_id} did not include requested tasks: {', '.join(missing)}")
     return seeds
 
+
+
+def prepare_lazy_trial_seeds(
+    run_id: str,
+    trial_ids: list[str],
+    task_ids: list[str],
+) -> dict[str, dict[str, str]]:
+    if len(trial_ids) < len(task_ids):
+        raise SystemExit("leaderboard run returned fewer trial ids than requested tasks")
+    seeds: dict[str, dict[str, str]] = {}
+    for task_id, trial_id in zip(task_ids, trial_ids):
+        seeds[task_id] = {"trial_id": trial_id, "task_id": task_id, "run_id": run_id}
+    return seeds
 
 def submit_leaderboard(args: argparse.Namespace) -> int:
     client = HarnessServiceClientSync(os.getenv("BENCHMARK_HOST") or BITGN_URL)
@@ -756,7 +772,7 @@ def run_task(args: argparse.Namespace) -> int:
     if args.leaderboard and trial_seed is None:
         raise SystemExit("leaderboard run-task requires --trial-seed")
     if args.leaderboard and trial_seed and not trial_seed.get("harness_url"):
-        raw_trial = adapter._start_trial(client=client, trial_id=str(trial_seed["trial_id"]), log=log)
+        raw_trial = client.start_trial(StartTrialRequest(trial_id=str(trial_seed["trial_id"])))
         actual_task_id = str(raw_trial.task_id)
         trial = SimpleNamespace(
             trial_id=str(raw_trial.trial_id),

@@ -64,7 +64,7 @@ print or commit secrets.
 | PAC1 dev | `pac1-dev-cache-speed-001` | 43 | `43/43` | 10 | no | `131.381s` |
 | PAC1 prod blind | `pac1-prod-blind-002` | 104 | `20/104` | 10 | no | `182.606s` |
 | ECOM leaderboard | `leaderboard-shmygolet-v006-002` | 44 | `44/44` | 10 | yes | `26.412s` local, `0:23` leaderboard |
-| PAC1 leaderboard | `pac1-leaderboard-shmygolet-v006-004` | 43 | `43/43` | 10 | yes | `153.474s` local |
+| PAC1 leaderboard | `pac1-leaderboard-shmygolet-v006-005` | 43 | `43/43` | 10 | yes | `133.851s` local |
 
 ECOM leaderboard name: `[@skifmax]-[code-without-llm]-[shmygolet]-[v006]`.
 PAC1 prod was a blind run over `t000..t103`; this row records that measurement,
