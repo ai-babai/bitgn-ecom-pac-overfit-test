@@ -39,7 +39,7 @@ wheels = [
 ]
 
 [[package]]
-name = "bitgn-ecom-pac-lab"
+name = "bitgn-ecom-pac-overfit-test"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [

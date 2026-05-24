@@ -1,8 +1,8 @@
-# bitgn-ecom-pac-lab
+# bitgn-ecom-pac-overfit-test
 
 [Русский](README.ru.md)
 
-`bitgn-ecom-pac-lab` is an experimental lab for BitGN ECOM/PAC1 benchmarks. The project explores different strategies for solving benchmark tasks; the current main strategy uses pre-written deterministic code without AI/LLM calls during task execution.
+`bitgn-ecom-pac-overfit-test` is an experimental overfit testbed for BitGN ECOM/PAC1 benchmarks. The project checks how far benchmark tasks can be pushed with pre-written deterministic code and rules, without AI/LLM calls during task execution.
 
 Quick navigation: detailed [environment setup and verification](#environment-setup-and-verification) is at the end of this README.
 
@@ -71,7 +71,7 @@ For dev rows, `Leaderboard=yes` means these are fresh leaderboard runs named `[@
 ## Architecture
 
 ```text
-bitgn-ecom-pac-lab
+bitgn-ecom-pac-overfit-test
 ├── bitgn_run/
 │   ├── cli.py        # CLI entrypoint
 │   ├── config.py     # env/tasks/workers/leaderboard/fail-fast/run limits
@@ -120,14 +120,14 @@ This section is reference material: installation is not the main purpose of the 
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/ai-babai/bitgn-ecom-pac-lab.git
-cd bitgn-ecom-pac-lab
+git clone https://github.com/ai-babai/bitgn-ecom-pac-overfit-test.git
+cd bitgn-ecom-pac-overfit-test
 ```
 
 If the local checkout was created before the repository rename:
 
 ```bash
-git remote set-url origin https://github.com/ai-babai/bitgn-ecom-pac-lab.git
+git remote set-url origin https://github.com/ai-babai/bitgn-ecom-pac-overfit-test.git
 ```
 
 ### 2. Install uv and Python
