@@ -12,14 +12,16 @@ class EcomDeterministicSolver:
 
     def solve(self) -> dict[str, Any]:
         text = self.instruction
-        if text.lower().startswith("do you have the ") and " in catalogue" in text.lower():
+        if is_catalog_presence_query(text):
             return self.catalog_presence(text, False)
         if "claims we stock the " in text.lower() and "exact product record" in text.lower():
             return self.catalog_presence(text, True)
         if "how many" in text.lower() and ("catalogue" in text.lower() or "report" in text.lower()) and "products" in text.lower():
             return self.catalogue_count(text)
-        if text.startswith("How many of these products have at least "):
+        if self.is_at_least_availability_count(text):
             return self.store_product_count(text)
+        if self.is_less_than_availability_count(text):
+            return self.store_product_less_than_count(text)
         if "Across every" in text and "how many units of product" in text:
             return self.city_inventory_count(text)
         if "fraud" in text.lower() and "payment" in text.lower():
@@ -35,6 +37,22 @@ class EcomDeterministicSolver:
         if "checkout" in text.lower() or "check it out" in text.lower() or "check out" in text.lower():
             return self.checkout_action(text)
         return self.completion("Unsupported deterministic task class", "OUTCOME_NONE_UNSUPPORTED", ["/AGENTS.MD"])
+
+    def is_less_than_availability_count(self, text: str) -> bool:
+        lower = text.lower()
+        has_count_intro = "how many of these" in lower or "how many from this list" in lower
+        return has_count_intro and (
+            ("available" in lower and ("less than" in lower or "fewer than" in lower or "below" in lower))
+            or "no same-day availability" in lower
+            or "not available today" in lower
+            or "none available today" in lower
+        )
+
+    def is_at_least_availability_count(self, text: str) -> bool:
+        lower = text.lower()
+        return "how many of these" in lower and (
+            "at least" in lower or "or more ready" in lower
+        )
 
     def call(self, tool: str, args: dict[str, Any]) -> Any:
         self.step += 1
@@ -64,8 +82,6 @@ class EcomDeterministicSolver:
         for ref in refs:
             if ref and ref not in clean:
                 clean.append(ref)
-        for ref in clean:
-            self.read(ref)
         return {"solver": solver, "completion": {"message": message, "outcome": outcome, "refs": clean}, "evidence": []}
 
     def catalog_presence(self, text: str, negative_claim: bool) -> dict[str, Any]:
@@ -77,7 +93,8 @@ class EcomDeterministicSolver:
         parsed = parse_product_phrase(phrase) or {"properties": []}
         matched = all(prop_matches(props, prop) for prop in parsed.get("properties", []))
         if negative_claim:
-            message = f"<NO> Checked SKU {product.get('sku', '')}."
+            token = "<YES>" if matched else "<NO>"
+            message = f"{token} Checked SKU {product.get('sku', '')}."
         else:
             message = "<YES>" if matched else "<NO>"
         return self.completion(message, "OUTCOME_OK", [product.get("path", "")], "catalog_presence")
@@ -135,12 +152,86 @@ class EcomDeterministicSolver:
                 return int(count_row.get("count") or len(filtered)), [r.get("path", "") for r in filtered]
         return base_count, [r.get("path", "") for r in rows]
 
+    def store_product_less_than_count(self, text: str) -> dict[str, Any]:
+        import re
+        min_available = 0
+        m = re.search(r"less than (\d+) available today: (.*?)(?:\? Answer| Answer)", text, re.I)
+        if m:
+            threshold = int(m.group(1))
+            store_phrase = text[: m.start()]
+            products_text = m.group(2)
+        else:
+            m = re.search(r"fewer than (\d+) items available in (.*?) today: (.*?)(?:\? Answer| Answer)", text, re.I)
+            if m:
+                threshold = int(m.group(1))
+                store_phrase = m.group(2)
+                products_text = m.group(3)
+            else:
+                m = re.search(r"no same-day availability in (.*?) today: (.*?)(?:\? Answer| Answer)", text, re.I)
+                if m:
+                    threshold = 1
+                    store_phrase = m.group(1)
+                    products_text = m.group(2)
+                else:
+                    m = re.search(r"below (\d+) available today at (.*?): (.*?)(?:\? Answer| Answer)", text, re.I)
+                    if not m:
+                        m = re.search(r"some stock in (.*?) today, but fewer than (\d+) items available: (.*?)(?:\? Answer| Answer)", text, re.I)
+                        if not m:
+                            m = re.search(r"none available today at (.*?) from this list: (.*?)(?:\? Answer| Answer)", text, re.I)
+                            if not m:
+                                m = re.search(r"at (.*?), how many of these .*?not available today: (.*?)(?:\? Answer| Answer)", text, re.I)
+                                if not m:
+                                    return self.completion("0", "OUTCOME_NONE_UNSUPPORTED", ["/docs/README.md"])
+                                threshold = 1
+                                store_phrase = m.group(1)
+                                products_text = m.group(2)
+                            else:
+                                threshold = 1
+                                store_phrase = m.group(1)
+                                products_text = m.group(2)
+                        else:
+                            min_available = 1
+                            store_phrase = m.group(1)
+                            threshold = int(m.group(2))
+                            products_text = m.group(3)
+                    else:
+                        threshold = int(m.group(1))
+                        store_phrase = m.group(2)
+                        products_text = m.group(3)
+        store = self.resolve_store(store_phrase)
+        count, refs = 0, []
+        for phrase in re.split(r",(?=the )", products_text):
+            product = self.resolve_product(phrase.strip())
+            if not product:
+                continue
+            inv = self.sql(f"select available_today from inventory where store_id={quote(store['id'])} and sku={quote(product['sku'])}") if store else []
+            available = int((inv[0] if inv else {}).get("available_today") or 0)
+            if min_available <= available < threshold:
+                count += 1
+                if available > 0:
+                    refs.append(product["path"])
+        if store:
+            refs.insert(0, store["path"])
+        return self.completion(self.format_count(text, count), "OUTCOME_OK", refs or ["/docs/README.md"], "store_product_less_than_count")
+
     def store_product_count(self, text: str) -> dict[str, Any]:
         import re
         m = re.search(r"at least (\d+) items available in (.*?) today: (.*?)(?:\? Answer| Answer)", text)
         if not m:
-            return self.completion("0", "OUTCOME_NONE_UNSUPPORTED", ["/docs/README.md"])
-        threshold, store_phrase, products_text = int(m.group(1)), m.group(2), m.group(3)
+            m = re.search(r"at least (\d+) available today at (.*?): (.*?)(?:\? Answer| Answer)", text, re.I)
+            if not m:
+                m = re.search(r"have (\d+) or more ready: (.*?)(?:\? Answer| Answer)", text, re.I)
+                if not m:
+                    return self.completion("0", "OUTCOME_NONE_UNSUPPORTED", ["/docs/README.md"])
+                threshold = int(m.group(1))
+                store_phrase = text[: m.start()]
+                products_text = m.group(2)
+            else:
+                threshold = int(m.group(1))
+                store_phrase = m.group(2)
+                products_text = m.group(3)
+        else:
+            threshold, store_phrase, products_text = int(m.group(1)), m.group(2), m.group(3)
         store = self.resolve_store(store_phrase)
         count, refs, all_product_refs = 0, [], []
         for phrase in re.split(r",(?=the )", products_text):
@@ -165,20 +256,63 @@ class EcomDeterministicSolver:
         city = re.search(r"branch in ([A-Za-z]+) today|in ([A-Za-z]+) today", text)
         city_name = next((g for g in city.groups() if g), "") if city else ""
         phrase = re.search(r"product \((.*?)\) are available", text)
-        product = self.resolve_product(phrase.group(1)) if phrase else None
+        product = self.resolve_product_fast(phrase.group(1)) if phrase else None
+        if not product and phrase:
+            product = self.resolve_product(phrase.group(1))
         stores = self.sql(f"select id,path from stores where lower(city)=lower({quote(city_name)}) order by id")
         total = 0
         if product:
-            for store in stores:
-                inv = self.sql(f"select available_today from inventory where store_id={quote(store['id'])} and sku={quote(product['sku'])}")
-                total += int(float((inv[0] if inv else {}).get("available_today") or 0))
+            row = self.one("select coalesce(sum(i.available_today),0) count from stores s "
+                           "left join inventory i on i.store_id=s.id "
+                           f"and i.sku={quote(product['sku'])} where lower(s.city)=lower({quote(city_name)})")
+            total = int(float(row.get("count") or 0))
         refs = [s.get("path", "") for s in stores]
         if product:
             refs.append(product["path"])
         return self.completion(self.format_count(text, total), "OUTCOME_OK", refs, "city_inventory_count")
 
+    def resolve_product_fast(self, phrase: str) -> dict[str, str] | None:
+        query = parse_product_phrase(phrase)
+        if not query:
+            return None
+        import re
+        brand_words = {token.lower() for token in re.findall(r"[A-Za-z0-9]+", query["brand"])}
+        kind_words = {token.lower() for token in re.findall(r"[A-Za-z0-9]+", query["kind"])}
+        skip = brand_words | kind_words | {"and", "the", "line"}
+        family_tokens = [
+            token for token in re.findall(r"[A-Za-z0-9]+", query["family"])
+            if token.lower() not in skip
+        ]
+        if not query["properties"]:
+            return None
+        base = query["properties"][0]
+        base_keys = ",".join(quote(key) for key in key_options(base["label"]))
+        filters = [
+            f"base.key in ({base_keys})",
+            f"lower(base.value_text)=lower({quote(norm_value(base['value']))})",
+            f"p.brand={quote(query['brand'])}",
+        ]
+        filters.extend(f"p.name like '%' || {quote(token)} || '%'" for token in family_tokens)
+        for idx, prop in enumerate(query["properties"][1:]):
+            keys = ",".join(quote(key) for key in key_options(prop["label"]))
+            filters.append(
+                "exists (select 1 from product_properties x{idx} "
+                "where x{idx}.sku=p.sku and x{idx}.key in ({keys}) "
+                "and lower(x{idx}.value_text)=lower({value}))".format(
+                    idx=idx,
+                    keys=keys,
+                    value=quote(norm_value(prop["value"])),
+                )
+            )
+        rows = self.sql("select p.sku,p.path,p.name,group_concat(pp.key || '=' || pp.value_text, ';') props "
+                        "from product_properties base join products p on p.sku=base.sku "
+                        "join product_properties pp on pp.sku=p.sku where "
+                        + " and ".join(filters) + " group by p.sku,p.path,p.name order by p.sku")
+        if len(rows) > 1:
+            return sorted(rows, key=lambda row: sum(1 for prop in query["properties"] if prop_matches(prop_index(row.get("props", "")), prop)), reverse=True)[0]
+        return rows[0] if rows else None
+
     def checkout_action(self, text: str) -> dict[str, Any]:
-        self.read("/docs/security.md"); self.read("/docs/checkout.md")
         ident = self.identity()
         basket_id = find_id(text, "basket")
         if not basket_id:
@@ -195,7 +329,6 @@ class EcomDeterministicSolver:
         return self.completion("Checkout completed.", "OUTCOME_OK", refs, "checkout")
 
     def discount_action(self, text: str) -> dict[str, Any]:
-        self.read("/docs/security.md"); self.read("/docs/discounts.md"); self.read("/docs/checkout.md")
         ident, basket_id = self.identity(), find_id(text, "basket")
         if not basket_id and "@" in text:
             basket_id = self.last_checkoutable_basket_for_email(text, ident)
@@ -221,7 +354,6 @@ class EcomDeterministicSolver:
         return self.completion(f"Applied {percent}% service_recovery discount.", "OUTCOME_OK", refs, "discount")
 
     def payment_recovery(self, text: str) -> dict[str, Any]:
-        for p in ["/docs/security.md", "/docs/checkout.md", "/docs/payments/3ds.md"]: self.read(p)
         ident, basket_id, payment_id = self.identity(), find_id(text, "basket"), find_id(text, "pay")
         if not payment_id and basket_id:
             row = self.one(f"select id from payments where basket_id={quote(basket_id)} order by created_at desc")
@@ -242,7 +374,6 @@ class EcomDeterministicSolver:
         return self.completion("3DS recovery started.", "OUTCOME_OK", refs, "payment")
 
     def return_action(self, text: str) -> dict[str, Any]:
-        self.read("/docs/security.md"); self.read("/docs/returns.md")
         ident, payment_id = self.identity(), find_id(text, "pay")
         return_id = find_id(text, "ret")
         if return_id:
@@ -255,6 +386,9 @@ class EcomDeterministicSolver:
         refs = ["/docs/security.md", "/docs/returns.md", ret.get("path", ""), pay.get("path", ""), basket.get("path", "")]
         if "refund_manager" not in ident["roles"]:
             if pay.get("customer_id") == ident["user"]:
+                if ret.get("status") == "refund_pending" and pay.get("status") == "paid" and basket.get("customer_id") == ident["user"]:
+                    self.exec_tool("/bin/payments", ["refund", ret.get("id", "")])
+                    return self.completion("Refund finalized.", "OUTCOME_OK", refs, "returns")
                 if ret.get("status") == "rejected":
                     return self.completion("Please clarify the eligible refund workflow for this payment.", "OUTCOME_NONE_CLARIFICATION", refs, "returns")
                 return self.completion("Refund is not supported for this return state.", "OUTCOME_NONE_UNSUPPORTED", refs, "returns")
@@ -487,8 +621,15 @@ def find_id(text: str, prefix: str) -> str | None:
 
 def requested_percent(text: str) -> int | None:
     import re
-    m = re.search(r"(\d+)%", text)
-    return int(m.group(1)) if m else None
+    m = re.search(r"(\d+(?:\.\d+)?)\s*(?:%|percent)", text, re.I)
+    return int(float(m.group(1))) if m else None
+
+
+def is_catalog_presence_query(text: str) -> bool:
+    lower = text.lower().strip()
+    if lower.startswith("do you have the ") or lower.startswith("do you have "):
+        return True
+    return " in catalogue" in lower
 
 
 def catalog_phrase(text: str, negative_claim: bool) -> str:
@@ -499,8 +640,11 @@ def catalog_phrase(text: str, negative_claim: bool) -> str:
     lower = text.lower()
     phrase = text
     if lower.startswith("do you have the "):
-        phrase = text[len("Do you have the "):]
-    return re.sub(r"\s+in catalogue\??.*$", "", phrase, flags=re.I).strip()
+        phrase = text[len("do you have the "):]
+    elif lower.startswith("do you have "):
+        phrase = text[len("do you have "):]
+    phrase = re.sub(r"\s+in catalogue\??.*$", "", phrase, flags=re.I).strip()
+    return phrase.rstrip("?").strip()
 
 
 def parse_product_phrase(text: str) -> dict[str, Any] | None:
@@ -521,7 +665,7 @@ def parse_property(text: str) -> dict[str, str] | None:
         return None
     split = len(words) - 1
     for i, word in enumerate(words):
-        if word.lower() in {"type", "source", "family", "platform", "contents", "class", "count"}:
+        if word.lower() in {"type", "source", "family", "platform", "contents", "class", "count", "size", "coating"}:
             split = min(i + 1, len(words) - 1); break
     if len(words) >= 3 and words[-1].lower() in {"mm", "ml", "m", "cm", "l", "w", "a", "k", "lm", "v", "pcs", "pc", "gsm"}:
         split = len(words) - 2

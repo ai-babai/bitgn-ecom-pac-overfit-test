@@ -9,7 +9,7 @@ unsupported with evidence.
 - Runtime calls go only through the gateway boundary.
 - Solvers do not perform side effects directly.
 - No task-id-specific logic in solvers, gates, or parsers.
-- Every submitted answer must include read refs and a gate report.
+- Every submitted answer must include concrete grounding refs and a gate-readable outcome.
 - Uncertain parsing fails closed as unsupported or clarification.
 - Runs are configurable from the CLI: leaderboard mode, tasks/suite, run id,
   version, workers, fail-fast, artifact dir, and enabled rules.
@@ -33,5 +33,6 @@ unsupported with evidence.
 task text -> parser -> intent -> solver -> evidence -> gates -> completion
 ```
 
-The first solvers target catalog and inventory tasks because those are strongly
-structured around SQL, product records, store records, and exact refs.
+The current ECOM solvers target catalog, inventory, checkout, discount, payment,
+return, fraud, and security-shaped tasks because the dev suite is strongly
+structured around SQL, product records, store records, policy docs, and exact refs.

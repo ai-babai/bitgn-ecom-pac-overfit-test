@@ -1,27 +1,34 @@
 # Benchmark Results
 
-Latest saved measurements for this repository.
+Latest saved measurements for the Rust-wrapper branch.
+
+## Summary
 
 | Benchmark | Env | Run id | Tasks | Result | Workers | Leaderboard | Wall sum |
 | --- | --- | --- | ---: | ---: | ---: | --- | ---: |
-| `pac1_dev` | dev | `decouple-pac1-dev-001` | 43 | `43/43` | 10 | yes | `89.142s` local |
-| `ecom1_dev` | dev | `decouple-ecom-dev-002` | 44 | `44/44` | 10 | yes | `48.020s` local; `0:23` leaderboard |
-| `pac1_prod` | prod blind | `pac1-prod-blind-003` | 104 | `20/104` | 10 | no | `184.323s` |
+| `ecom1_dev` | dev | `rust-ecom-dev-46-sumtarget-w4-004` | 46 | `46/46` | 4 | no | `28.000s` local |
+| `ecom1_dev` | dev | `rust-ecom-leaderboard-v011` | 46 | `46/46` | 4 | yes | `28.532s` local |
 
+Successful leaderboard name:
+
+```text
+[@skifmax]-[code-without-llm]-[eniki-beniki]-[v011]
+```
 
 ## Timing Snapshot
 
-Measured from the latest local dev runs without leaderboard submission for dev suites that already have successful leaderboard artifacts. `Task wall` is the sum of per-task `wall_seconds`. Tool stages come from `tool_calls.jsonl`; `Overhead` is the remaining task wall time: local solver work, artifact I/O, trial close, and scoring.
+Measured from `rust-ecom-dev-46-sumtarget-w4-004`, without leaderboard submission.
+`Task wall` is the sum of per-task `wall_seconds`. Tool stages come from
+`tool_calls.jsonl`; `Overhead` is the remaining time inside task wall: local solver
+work, artifact I/O, trial close, and scoring.
 
-| Benchmark | Run id | Tasks | Workers | Task wall sum | Avg task | Median | P95 | Tool calls sum | Read/search stage | Action stage | Completion stage | Overhead |
-| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `ecom1_dev` | `decouple-ecom-dev-002` | 44 | 10 | `48.020s` | `1.091s` | `0.569s` | `1.312s` | `32.870s` | `11.740s` | `19.108s` | `2.022s` | `15.150s` |
-| `pac1_dev` | `decouple-pac1-dev-001` | 43 | 10 | `89.142s` | `2.073s` | `1.523s` | `4.523s` | `86.056s` | `77.463s` | `4.142s` | `4.451s` | `3.086s` |
-
-For ECOM, the observed tool window was about `65.856s`, which is larger than task wall sum because trial startup and part of queueing are not included in `wall_seconds` yet. For PAC1, the observed tool window was about `16.655s` because work was spread across 10 worker threads.
+| Benchmark | Run id | Tasks | Workers | Task wall sum | Avg task | Median | P95 | Slowest | Tool calls sum | Read/search/sql | Action | Completion | Overhead |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `ecom1_dev` | `rust-ecom-dev-46-sumtarget-w4-004` | 46 | 4 | `28.000s` | `0.609s` | `0.384s` | `0.716s` | `7.791s` | `22.307s` | `19.189s` | `1.521s` | `1.597s` | `5.693s` |
 
 Notes:
-- For dev rows, `Leaderboard=yes` means there is a successful leaderboard artifact; timing still comes from the latest local verification run without submission.
-- PAC1 prod is a blind run over `t000..t103` without leaderboard submission.
+
 - `runs/` is intentionally gitignored; this file preserves the committed summary.
-- The large dev/prod gap is expected for this code-only overfit experiment.
+- Leaderboard-visible time is server-side lifecycle time and can differ from local task wall.
+- ECOM leaderboard prepare must use trial-id-only seeds. Pre-starting all ECOM trials before workers inflates server-side time.
+- This is a code-only overfit experiment for the known dev suite, not a general agent benchmark result.

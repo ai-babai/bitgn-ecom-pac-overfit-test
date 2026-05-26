@@ -11,7 +11,7 @@ from typing import Any
 
 from bitgn.harness_connect import HarnessServiceClientSync
 from bitgn.harness_pb2 import EndTrialRequest, StartRunRequest, StartTrialRequest, SubmitRunRequest
-from bitgn_runtime import BITGN_URL, BitgnAdapter, ToolGateway, create_task_workspace, open_task_workspace
+from bitgn_runtime import BITGN_URL, BitgnAdapter, ToolGateway, create_task_workspace, open_task_workspace, start_run_with_retry
 from ecom_solver import EcomDeterministicSolver
 from pac1_solver import Pac1DeterministicSolver
 
@@ -43,12 +43,12 @@ def prepare_leaderboard(args: argparse.Namespace) -> int:
         raise SystemExit("prepare-leaderboard requires at least one task")
     client = HarnessServiceClientSync(os.getenv("BENCHMARK_HOST") or BITGN_URL)
     run_name = args.run_name or os.getenv("BITGN_RUN_NAME") or "code-without-llm"
-    run = client.start_run(StartRunRequest(benchmark_id=adapter.benchmark_id, name=run_name, api_key=api_key))
+    run = start_run_with_retry(client, StartRunRequest(benchmark_id=adapter.benchmark_id, name=run_name, api_key=api_key))
     run_id = str(run.run_id)
     trial_ids = [str(item) for item in run.trial_ids]
     if len(trial_ids) < len(task_ids):
         raise SystemExit(f"leaderboard run {run_id} returned only {len(trial_ids)} trial ids for {len(task_ids)} tasks")
-    if args.env.startswith("pac1"):
+    if args.env.startswith("pac1") or args.env == "ecom":
         seeds = prepare_trial_id_only_seeds(run_id, trial_ids, task_ids)
     else:
         seeds = prepare_trial_seeds(client, run_id, trial_ids, task_ids)
@@ -82,22 +82,37 @@ def prepare_trial_seeds(
     trial_ids: list[str],
     task_ids: list[str],
 ) -> dict[str, dict[str, str]]:
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
     requested = set(task_ids)
     seeds: dict[str, dict[str, str]] = {}
-    for trial_id in trial_ids:
-        trial = client.start_trial(StartTrialRequest(trial_id=trial_id))
+
+    def start_seed(trial_id: str) -> dict[str, str] | None:
+        local_client = HarnessServiceClientSync(os.getenv("BENCHMARK_HOST") or BITGN_URL)
+        trial = local_client.start_trial(StartTrialRequest(trial_id=trial_id))
         task_id = str(trial.task_id)
-        if task_id not in requested or task_id in seeds:
-            continue
-        seeds[task_id] = {
+        if task_id not in requested:
+            return None
+        return {
             "trial_id": str(trial.trial_id),
             "task_id": task_id,
             "instruction": str(trial.instruction),
             "harness_url": str(trial.harness_url),
             "run_id": run_id,
         }
-        if len(seeds) == len(requested):
-            break
+
+    workers = min(12, max(1, len(trial_ids)))
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = [pool.submit(start_seed, trial_id) for trial_id in trial_ids]
+        for future in as_completed(futures):
+            seed = future.result()
+            if not seed:
+                continue
+            task_id = seed["task_id"]
+            if task_id not in seeds:
+                seeds[task_id] = seed
+            if len(seeds) == len(requested):
+                break
     missing = [task_id for task_id in task_ids if task_id not in seeds]
     if missing:
         raise SystemExit(f"leaderboard run {run_id} did not include requested tasks: {', '.join(missing)}")

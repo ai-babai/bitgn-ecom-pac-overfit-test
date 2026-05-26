@@ -11,22 +11,22 @@ use std::thread;
 pub fn run(config: RunConfig) -> Result<(), String> {
     let writer = ArtifactWriter::new(&config)?;
     let bridge = Bridge::discover();
-    let leaderboard = if config.leaderboard {
+    let prepared = if config.leaderboard || config.env == "ecom" {
         Some(prepare_leaderboard(&config, &bridge)?)
     } else {
         None
     };
-    let seeds = leaderboard
-        .as_ref()
-        .map(|prep| Arc::new(prep.seeds.clone()));
+    let seeds = prepared.as_ref().map(|prep| Arc::new(prep.seeds.clone()));
     let results = if config.workers <= 1 {
         run_sequential(&config, &bridge, &writer, seeds.clone())?
     } else {
         run_parallel(&config, &bridge, &writer, seeds.clone())?
     };
     writer.finish(&results)?;
-    if let Some(prep) = leaderboard {
-        submit_if_eligible(&config, &bridge, &results, &prep.run_id)?;
+    if config.leaderboard {
+        if let Some(prep) = prepared {
+            submit_if_eligible(&config, &bridge, &results, &prep.run_id)?;
+        }
     }
     Ok(())
 }

@@ -75,15 +75,11 @@ impl Bridge {
     }
 
     fn base_args(&self) -> Vec<String> {
-        vec![
-            "run".into(),
-            "python".into(),
-            self.script.display().to_string(),
-        ]
+        vec![self.script.display().to_string()]
     }
 
     fn run_json(&self, args: Vec<String>) -> Result<Value, String> {
-        let out = Command::new("uv")
+        let out = Command::new(".venv/bin/python")
             .args(args)
             .output()
             .map_err(|e| e.to_string())?;

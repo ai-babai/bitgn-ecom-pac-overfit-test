@@ -158,6 +158,21 @@ def now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def start_run_with_retry(client: HarnessServiceClientSync, request: StartRunRequest) -> Any:
+    last_error: Exception | None = None
+    for attempt in range(5):
+        try:
+            return client.start_run(request)
+        except Exception as exc:
+            last_error = exc
+            if "database is locked" not in str(exc).lower():
+                raise
+            time.sleep(0.25 * (attempt + 1))
+    if last_error:
+        raise last_error
+    raise RuntimeError("start_run failed")
+
+
 class BitgnAdapter:
     def __init__(self, *, env: str) -> None:
         self.requested_env = env
@@ -209,12 +224,13 @@ class BitgnAdapter:
     ) -> StartedTrial:
         if not api_key:
             raise RuntimeError("ECOM requires BITGN_ECOM_API_KEY, BITGN_API_KEY, or ~/.bitgn/bitgn-api-key")
-        run = client.start_run(
+        run = start_run_with_retry(
+            client,
             StartRunRequest(
                 benchmark_id=self.benchmark_id,
                 name=f"ecom-code-only-{task_id}-{utc_stamp()}",
                 api_key=api_key,
-            )
+            ),
         )
         for trial_id in run.trial_ids:
             trial = client.start_trial(StartTrialRequest(trial_id=str(trial_id)))
