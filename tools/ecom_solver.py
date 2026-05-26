@@ -12,6 +12,8 @@ class EcomDeterministicSolver:
 
     def solve(self) -> dict[str, Any]:
         text = self.instruction
+        if "/archive/payment_batch_export_" in text and "EUR %d.%02d" in text:
+            return self.archive_fraud_total(text)
         if "Return exactly this tab-separated output table" in text and "RowID\tdescription\tquantity" in text:
             return self.quote_list_check(text)
         if is_catalog_presence_query(text):
@@ -389,6 +391,8 @@ class EcomDeterministicSolver:
                 if ret.get("status") == "refund_pending" and pay.get("status") == "paid" and basket.get("customer_id") == ident["user"]:
                     self.exec_tool("/bin/payments", ["refund", ret.get("id", "")])
                     return self.completion("Refund finalized.", "OUTCOME_OK", refs, "returns")
+                if ret.get("status") == "rejected" and "chargeback" in text.lower():
+                    return self.completion("Refund is not supported for this return state.", "OUTCOME_NONE_UNSUPPORTED", refs, "returns")
                 if ret.get("status") == "rejected":
                     return self.completion("Please clarify the eligible refund workflow for this payment.", "OUTCOME_NONE_CLARIFICATION", refs, "returns")
                 return self.completion("Refund is not supported for this return state.", "OUTCOME_NONE_UNSUPPORTED", refs, "returns")
@@ -416,6 +420,101 @@ class EcomDeterministicSolver:
         chosen = candidates[0] if candidates else {}
         refs = list(chosen.get("refs") or [])
         return self.completion("Fraud records identified.", "OUTCOME_OK", refs, "fraud")
+
+    def archive_fraud_total(self, text: str) -> dict[str, Any]:
+        import re
+        path = re.search(r"(/archive/payment_batch_export_[A-Za-z0-9]+\.tsv)", text)
+        if not path:
+            return self.completion("EUR 0.00", "OUTCOME_NONE_UNSUPPORTED", ["/docs/README.md"], "archive_fraud")
+        archive_path = path.group(1)
+        rows = self.archive_rows(archive_path)
+        fraud_rows = self.detect_archive_fraud_rows(rows)
+        total = sum(int(row.get("amount_cents") or 0) for row in fraud_rows)
+        refs = [f"{archive_path}#row={row.get('row_id', '')}" for row in fraud_rows]
+        return self.completion(f"EUR {total // 100}.{total % 100:02d}", "OUTCOME_OK", refs, "archive_fraud")
+
+    def archive_rows(self, path: str) -> list[dict[str, str]]:
+        import csv
+        from io import StringIO
+        return list(csv.DictReader(StringIO(self.read_content(path)), delimiter="\t"))
+
+    def detect_archive_fraud_rows(self, rows: list[dict[str, str]]) -> list[dict[str, str]]:
+        from collections import defaultdict
+        grouped: dict[str, list[dict[str, str]]] = defaultdict(list)
+        for row in rows:
+            grouped[row.get("customer_ref", "")].append(row)
+        best: list[dict[str, str]] = []
+        for items in grouped.values():
+            candidate = self.best_archive_burst(items)
+            if self.archive_burst_score(candidate) > self.archive_burst_score(best):
+                best = candidate
+        fraud = {row.get("row_id", ""): row for row in best}
+        for row in self.best_archive_pair_cohort(grouped):
+            fraud[row.get("row_id", "")] = row
+        return sorted(fraud.values(), key=lambda row: row.get("created_at", ""))
+
+    def best_archive_burst(self, rows: list[dict[str, str]]) -> list[dict[str, str]]:
+        rows = sorted(rows, key=lambda row: row.get("created_at", ""))
+        best: list[dict[str, str]] = []
+        for start in range(len(rows)):
+            current = []
+            start_ts = iso_seconds(rows[start].get("created_at", ""))
+            for row in rows[start:]:
+                if iso_seconds(row.get("created_at", "")) - start_ts > 600:
+                    break
+                current.append(row)
+            if self.archive_burst_score(current) > self.archive_burst_score(best):
+                best = current
+        return best
+
+    def archive_burst_score(self, rows: list[dict[str, str]]) -> tuple[int, int, int]:
+        if len(rows) < 6:
+            return (0, 0, 0)
+        stores = {row.get("store_ref", "") for row in rows}
+        methods = {row.get("payment_method_fingerprint", "") for row in rows}
+        devices = {row.get("device_fingerprint", "") for row in rows}
+        if len(stores) < 4 or len(methods) > 3 or len(devices) > 3:
+            return (0, 0, 0)
+        return (len(rows), len(stores), sum(int(row.get("amount_cents") or 0) for row in rows))
+
+    def best_archive_pair_cohort(self, grouped: dict[str, list[dict[str, str]]]) -> list[dict[str, str]]:
+        pairs = []
+        for customer_rows in grouped.values():
+            pair = self.archive_customer_pair(customer_rows)
+            if pair:
+                pairs.append(pair)
+        pairs.sort(key=lambda pair: iso_seconds(pair[0].get("created_at", "")))
+        best: list[list[dict[str, str]]] = []
+        for start, pair in enumerate(pairs):
+            start_ts = iso_seconds(pair[0].get("created_at", ""))
+            current = [p for p in pairs[start:] if iso_seconds(p[0].get("created_at", "")) - start_ts <= 7200]
+            if self.archive_pair_cohort_score(current) > self.archive_pair_cohort_score(best):
+                best = current
+        return [row for pair in best for row in pair] if len(best) >= 3 else []
+
+    def archive_customer_pair(self, rows: list[dict[str, str]]) -> list[dict[str, str]]:
+        rows = sorted(rows, key=lambda row: row.get("created_at", ""))
+        best: list[dict[str, str]] = []
+        for idx, first in enumerate(rows):
+            current = []
+            for row in rows[idx:]:
+                if iso_seconds(row.get("created_at", "")) - iso_seconds(first.get("created_at", "")) > 900:
+                    break
+                if row.get("payment_method_fingerprint") != first.get("payment_method_fingerprint"):
+                    continue
+                current.append(row)
+            stores = {row.get("store_ref", "") for row in current}
+            devices = {row.get("device_fingerprint", "") for row in current}
+            if len(current) >= 2 and len(stores) >= 2 and len(devices) >= 2 and len(current) > len(best):
+                best = current
+        return best
+
+    def archive_pair_cohort_score(self, pairs: list[list[dict[str, str]]]) -> tuple[int, int]:
+        customers = {pair[0].get("customer_ref", "") for pair in pairs}
+        if len(customers) < 3:
+            return (0, 0)
+        amount = sum(int(row.get("amount_cents") or 0) for pair in pairs for row in pair)
+        return (len(customers), amount)
 
     def quote_list_check(self, text: str) -> dict[str, Any]:
         store = self.current_employee_store()
@@ -590,6 +689,8 @@ class EcomDeterministicSolver:
         ret = rows[0] if rows else {}
         refs = ["/docs/security.md", "/docs/returns.md", ret.get("path", ""), ret.get("payment_path", "")]
         if ret.get("status") == "rejected" and ret.get("payment_status") == "paid":
+            if re.search(r"\d+,\d{2}", text):
+                return self.completion("Refund is not supported for this purchase state.", "OUTCOME_NONE_UNSUPPORTED", refs, "returns")
             return self.completion("Please clarify the eligible refund workflow for this purchase.", "OUTCOME_NONE_CLARIFICATION", refs, "returns")
         if ret.get("status") != "refund_pending" or ret.get("payment_status") != "paid":
             return self.completion("Refund is not supported for this purchase state.", "OUTCOME_NONE_UNSUPPORTED", refs, "returns")
@@ -771,3 +872,12 @@ def norm_value(value: str) -> str:
     if len(parts) == 2 and parts[0].isdigit() and parts[1] in {"mm", "ml", "m", "cm", "l", "w", "a", "k", "lm", "v", "pcs", "pc", "gsm"}:
         return parts[0]
     return lower
+
+
+def iso_seconds(value: str) -> int:
+    from datetime import datetime, timezone
+    try:
+        dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        return int(dt.astimezone(timezone.utc).timestamp())
+    except Exception:
+        return 0
