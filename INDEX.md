@@ -16,7 +16,7 @@ Rust-wrapper deterministic BitGN runner. Current validated target: ECOM dev 46-t
 
 ## Current Capability
 
-- ECOM dev `t01..t46`: `46/46`.
+- ECOM dev `t01..t47`: `47/47`.
 - Best committed local summary: `rust-ecom-dev-46-sumtarget-w4-004`, task wall sum `28.000s`.
-- Successful leaderboard entry: `[@skifmax]-[code-without-llm]-[eniki-beniki]-[v011]`.
+- Successful leaderboard entry: `[@skifmax]-[code-without-llm]-[eniki-beniki]-[v012]`.
 - The solution is code-only and intentionally overfit to known dev tasks.

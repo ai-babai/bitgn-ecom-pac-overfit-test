@@ -12,13 +12,14 @@
 
 | Benchmark | Env | Run id | Tasks | Result | Workers | Leaderboard | Wall sum |
 | --- | --- | --- | ---: | ---: | ---: | --- | ---: |
-| `ecom1_dev` | dev | `rust-ecom-dev-46-sumtarget-w4-004` | 46 | `46/46` | 4 | no | `28.000s` local |
-| `ecom1_dev` | dev | `rust-ecom-leaderboard-v011` | 46 | `46/46` | 4 | yes | `28.532s` local |
+| `ecom1_dev` | dev | `rust-ecom-dev-47-stable-004` | 47 | `47/47` | 4 | no | `12.267s` local |
+| `ecom1_dev` | dev | `rust-ecom-leaderboard-v012` | 47 | `47/47` | 4 | yes | `12.254s` local |
 
 Успешная запись на leaderboard:
 
 ```text
 [@skifmax]-[code-without-llm]-[eniki-beniki]-[v011]
+[@skifmax]-[code-without-llm]-[eniki-beniki]-[v012]
 ```
 
 `Wall sum` - сумма `wall_seconds` по всем задачам. Видимое время на сайте BitGN
@@ -28,13 +29,13 @@ trial-id-only prepare: не стартовать все trials заранее д
 
 ## Срез времени
 
-Замер: `rust-ecom-dev-46-sumtarget-w4-004`, ECOM dev `t01..t46`, без leaderboard.
+Замер: `rust-ecom-dev-47-stable-004`, ECOM dev `t01..t47`, без leaderboard.
 
 | Benchmark | Run id | Tasks | Workers | Task wall sum | Avg task | Median | P95 | Slowest | Tool calls sum | Read/search/sql | Action | Completion | Overhead |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `ecom1_dev` | `rust-ecom-dev-46-sumtarget-w4-004` | 46 | 4 | `28.000s` | `0.609s` | `0.384s` | `0.716s` | `7.791s` | `22.307s` | `19.189s` | `1.521s` | `1.597s` | `5.693s` |
+| `ecom1_dev` | `rust-ecom-dev-47-stable-004` | 47 | 4 | `12.267s` | `0.261s` | `0.181s` | `0.555s` | `0.642s` | not recomputed | not recomputed | not recomputed | not recomputed | not recomputed |
 
-Самая дорогая задача в этом срезе - `t20`, inventory aggregation по городу и продукту.
+Самые дорогие задачи в этом срезе - inventory/count и quote-check классы; максимум в сохраненном прогоне ниже `0.7s` на задачу.
 
 ## Архитектура
 
@@ -80,7 +81,7 @@ BitGN runtime, потому что generated packages и VM clients исполь
 - ECOM leaderboard должен готовиться через trial-id-only seeds.
 - Нельзя заранее вызывать `start_trial` для всех ECOM tasks до worker execution:
   это раздувает серверное время leaderboard.
-- Перед submit нужен локальный non-leaderboard прогон `t01..t46` с `46/46`.
+- Перед submit нужен локальный non-leaderboard прогон `t01..t47` с `47/47`.
 - Для текущей ветки рабочий шаблон имени:
 
 ```text
@@ -115,7 +116,7 @@ cargo build
 ECOM dev без leaderboard:
 
 ```bash
-TASKS=$(printf 't%02d,' $(seq 1 46)); TASKS=${TASKS%,}
+TASKS=$(printf 't%02d,' $(seq 1 47)); TASKS=${TASKS%,}
 target/debug/bitgn-ecom-run run \
   --env ecom \
   --run-id ecom-dev-local \
@@ -129,17 +130,17 @@ target/debug/bitgn-ecom-run run \
 ECOM dev leaderboard submit с gate по сумме времени:
 
 ```bash
-TASKS=$(printf 't%02d,' $(seq 1 46)); TASKS=${TASKS%,}
+TASKS=$(printf 't%02d,' $(seq 1 47)); TASKS=${TASKS%,}
 target/debug/bitgn-ecom-run run \
   --env ecom \
   --run-id rust-ecom-leaderboard-vNNN \
   --run-name '[@skifmax]-[code-without-llm]-[eniki-beniki]-[vNNN]' \
   --leaderboard true \
-  --fail-fast false \
+  --fail-fast true \
   --workers 4 \
   --tasks "$TASKS" \
   --artifact-dir runs \
-  --max-wall-sum-seconds 30
+  --max-wall-sum-seconds 47
 ```
 
 PAC1 commands still exist in the CLI, but this branch was last validated for ECOM dev.

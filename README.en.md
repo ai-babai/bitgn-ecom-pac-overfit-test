@@ -12,13 +12,14 @@ tasks.
 
 | Benchmark | Env | Run id | Tasks | Result | Workers | Leaderboard | Wall sum |
 | --- | --- | --- | ---: | ---: | ---: | --- | ---: |
-| `ecom1_dev` | dev | `rust-ecom-dev-46-sumtarget-w4-004` | 46 | `46/46` | 4 | no | `28.000s` local |
-| `ecom1_dev` | dev | `rust-ecom-leaderboard-v011` | 46 | `46/46` | 4 | yes | `28.532s` local |
+| `ecom1_dev` | dev | `rust-ecom-dev-47-stable-004` | 47 | `47/47` | 4 | no | `12.267s` local |
+| `ecom1_dev` | dev | `rust-ecom-leaderboard-v012` | 47 | `47/47` | 4 | yes | `12.254s` local |
 
 Successful leaderboard entry:
 
 ```text
 [@skifmax]-[code-without-llm]-[eniki-beniki]-[v011]
+[@skifmax]-[code-without-llm]-[eniki-beniki]-[v012]
 ```
 
 `Wall sum` is the sum of per-task `wall_seconds`. The visible BitGN leaderboard
@@ -28,13 +29,13 @@ must use trial-id-only seeds and must not pre-start all trials before worker exe
 
 ## Timing Snapshot
 
-Measurement: `rust-ecom-dev-46-sumtarget-w4-004`, ECOM dev `t01..t46`, no leaderboard.
+Measurement: `rust-ecom-dev-47-stable-004`, ECOM dev `t01..t47`, no leaderboard.
 
 | Benchmark | Run id | Tasks | Workers | Task wall sum | Avg task | Median | P95 | Slowest | Tool calls sum | Read/search/sql | Action | Completion | Overhead |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `ecom1_dev` | `rust-ecom-dev-46-sumtarget-w4-004` | 46 | 4 | `28.000s` | `0.609s` | `0.384s` | `0.716s` | `7.791s` | `22.307s` | `19.189s` | `1.521s` | `1.597s` | `5.693s` |
+| `ecom1_dev` | `rust-ecom-dev-47-stable-004` | 47 | 4 | `12.267s` | `0.261s` | `0.181s` | `0.555s` | `0.642s` | not recomputed | not recomputed | not recomputed | not recomputed | not recomputed |
 
-The slowest task in this snapshot is `t20`, city/product inventory aggregation.
+The slowest tasks in this snapshot are inventory/count and quote-check classes; the saved run stays below `0.7s` per task.
 
 ## Architecture
 
@@ -80,7 +81,7 @@ For speed, Rust now calls `.venv/bin/python` directly instead of `uv run` per ta
 - ECOM leaderboard prepare must use trial-id-only seeds.
 - Do not call `start_trial` for every ECOM task before worker execution; that inflates
   server-side leaderboard time.
-- Before submit, run a local non-leaderboard `t01..t46` check and require `46/46`.
+- Before submit, run a local non-leaderboard `t01..t47` check and require `47/47`.
 - Current naming pattern:
 
 ```text
@@ -115,7 +116,7 @@ cache directories are intentionally gitignored.
 ECOM dev without leaderboard:
 
 ```bash
-TASKS=$(printf 't%02d,' $(seq 1 46)); TASKS=${TASKS%,}
+TASKS=$(printf 't%02d,' $(seq 1 47)); TASKS=${TASKS%,}
 target/debug/bitgn-ecom-run run \
   --env ecom \
   --run-id ecom-dev-local \
@@ -129,17 +130,17 @@ target/debug/bitgn-ecom-run run \
 ECOM dev leaderboard submit with a wall-sum gate:
 
 ```bash
-TASKS=$(printf 't%02d,' $(seq 1 46)); TASKS=${TASKS%,}
+TASKS=$(printf 't%02d,' $(seq 1 47)); TASKS=${TASKS%,}
 target/debug/bitgn-ecom-run run \
   --env ecom \
   --run-id rust-ecom-leaderboard-vNNN \
   --run-name '[@skifmax]-[code-without-llm]-[eniki-beniki]-[vNNN]' \
   --leaderboard true \
-  --fail-fast false \
+  --fail-fast true \
   --workers 4 \
   --tasks "$TASKS" \
   --artifact-dir runs \
-  --max-wall-sum-seconds 30
+  --max-wall-sum-seconds 47
 ```
 
 PAC1 commands still exist in the CLI, but this branch was last validated for ECOM dev.

@@ -125,12 +125,22 @@ def prepare_trial_id_only_seeds(
     trial_ids: list[str],
     task_ids: list[str],
 ) -> dict[str, dict[str, str]]:
-    if len(trial_ids) < len(task_ids):
-        raise SystemExit("leaderboard run returned fewer trial ids than requested tasks")
     seeds: dict[str, dict[str, str]] = {}
-    for task_id, trial_id in zip(task_ids, trial_ids):
+    for task_id in task_ids:
+        index = ordered_task_index(task_id)
+        if index >= len(trial_ids):
+            raise SystemExit(f"leaderboard run returned no trial id for {task_id}")
+        trial_id = trial_ids[index]
         seeds[task_id] = {"trial_id": trial_id, "task_id": task_id, "run_id": run_id}
     return seeds
+
+
+def ordered_task_index(task_id: str) -> int:
+    import re
+    m = re.fullmatch(r"t(\d+)", task_id.strip().lower())
+    if not m:
+        raise SystemExit(f"ordered ECOM task id expected, got {task_id!r}")
+    return int(m.group(1)) - 1
 
 def submit_leaderboard(args: argparse.Namespace) -> int:
     client = HarnessServiceClientSync(os.getenv("BENCHMARK_HOST") or BITGN_URL)

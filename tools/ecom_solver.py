@@ -12,6 +12,8 @@ class EcomDeterministicSolver:
 
     def solve(self) -> dict[str, Any]:
         text = self.instruction
+        if "Return exactly this tab-separated output table" in text and "RowID\tdescription\tquantity" in text:
+            return self.quote_list_check(text)
         if is_catalog_presence_query(text):
             return self.catalog_presence(text, False)
         if "claims we stock the " in text.lower() and "exact product record" in text.lower():
@@ -256,9 +258,7 @@ class EcomDeterministicSolver:
         city = re.search(r"branch in ([A-Za-z]+) today|in ([A-Za-z]+) today", text)
         city_name = next((g for g in city.groups() if g), "") if city else ""
         phrase = re.search(r"product \((.*?)\) are available", text)
-        product = self.resolve_product_fast(phrase.group(1)) if phrase else None
-        if not product and phrase:
-            product = self.resolve_product(phrase.group(1))
+        product = self.resolve_product(phrase.group(1)) if phrase else None
         stores = self.sql(f"select id,path from stores where lower(city)=lower({quote(city_name)}) order by id")
         total = 0
         if product:
@@ -417,6 +417,50 @@ class EcomDeterministicSolver:
         refs = list(chosen.get("refs") or [])
         return self.completion("Fraud records identified.", "OUTCOME_OK", refs, "fraud")
 
+    def quote_list_check(self, text: str) -> dict[str, Any]:
+        store = self.current_employee_store()
+        rows = self.parse_quote_rows(text)
+        refs = [store.get("path", "")] if store else ["/docs/README.md"]
+        out = ["RowID\tSKU\tin_stock\tmatch"]
+        for row_id, description, quantity in rows:
+            product = self.resolve_product_exact(description)
+            if not product:
+                out.append(f"{row_id}\t\t\tfalse")
+                continue
+            stock = self.store_stock(store.get("id", "") if store else "", product.get("sku", ""))
+            refs.append(product.get("path", ""))
+            matched = "true" if stock >= quantity else "false"
+            out.append(f"{row_id}\t{product.get('sku', '')}\t{stock}\t{matched}")
+        return self.completion("\n".join(out), "OUTCOME_OK", refs, "quote_list_check")
+
+    def parse_quote_rows(self, text: str) -> list[tuple[str, str, int]]:
+        rows: list[tuple[str, str, int]] = []
+        in_rows = False
+        for line in text.splitlines():
+            raw = line.strip()
+            if raw == "Rows:":
+                in_rows = True
+                continue
+            if not in_rows or not raw or raw.startswith("RowID\t"):
+                continue
+            parts = raw.split("\t")
+            if len(parts) != 3:
+                continue
+            try:
+                rows.append((parts[0].strip(), parts[1].strip(), int(parts[2].strip())))
+            except ValueError:
+                continue
+        return rows
+
+    def current_employee_store(self) -> dict[str, str]:
+        ident = self.identity()
+        return self.one("select s.id,s.path,s.name,s.city from employees e join stores s on s.id=e.store_id "
+                        f"where e.id={quote(ident['user'])}")
+
+    def store_stock(self, store_id: str, sku: str) -> int:
+        row = self.one(f"select available_today from inventory where store_id={quote(store_id)} and sku={quote(sku)}")
+        return int(row.get("available_today") or 0)
+
     def identity(self) -> dict[str, Any]:
         out = str(self.exec_tool("/bin/id").get("stdout") or "")
         user = ""; roles: list[str] = []
@@ -482,7 +526,7 @@ class EcomDeterministicSolver:
             named = re.search(r"payment_id:\s*(pay_\d+)", content)
             if named and named.group(1) != payment_id:
                 continue
-            m = re.search(r"(?:only after|retry_available_at:|recovery resumes at)\s*(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})Z", content)
+            m = re.search(r"(?:only after|retry_available_at:|recovery resumes at)\s*\|?\s*(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})Z", content)
             if not m:
                 continue
             now = str(self.exec_tool("/bin/date").get("stdout") or "")
@@ -545,6 +589,8 @@ class EcomDeterministicSolver:
                         f"where r.customer_id={quote(ident['user'])} and p.amount_cents in ({cents},{int(raw)}) order by r.created_at desc")
         ret = rows[0] if rows else {}
         refs = ["/docs/security.md", "/docs/returns.md", ret.get("path", ""), ret.get("payment_path", "")]
+        if ret.get("status") == "rejected" and ret.get("payment_status") == "paid":
+            return self.completion("Please clarify the eligible refund workflow for this purchase.", "OUTCOME_NONE_CLARIFICATION", refs, "returns")
         if ret.get("status") != "refund_pending" or ret.get("payment_status") != "paid":
             return self.completion("Refund is not supported for this purchase state.", "OUTCOME_NONE_UNSUPPORTED", refs, "returns")
         self.exec_tool("/bin/payments", ["refund", ret.get("id", "")])
@@ -573,22 +619,7 @@ class EcomDeterministicSolver:
         query = parse_product_phrase(phrase)
         if not query:
             return None
-        import re
-        family_tokens = [
-            token for token in re.findall(r"[A-Za-z0-9]+", query["family"])
-            if token.lower() not in {query["brand"].lower()}
-        ]
-        family_filter = ""
-        if family_tokens:
-            family_filter = " and " + " and ".join(
-                f"lower(p.name) like lower('%' || {quote(token)} || '%')"
-                for token in family_tokens
-            )
-        rows = self.sql("select p.sku,p.path,p.name,group_concat(pp.key || '=' || pp.value_text, ';') props "
-                        "from products p join product_properties pp on pp.sku=p.sku "
-                        f"where lower(p.brand)=lower({quote(query['brand'])}) and lower(p.name) like lower('%' || {quote(query['kind'])} || '%')"
-                        f"{family_filter} "
-                        "group by p.sku,p.path,p.name order by p.sku")
+        rows = self.product_candidate_rows(query)
         def score(row: dict[str, str]) -> tuple[int, int, int]:
             props = prop_index(row.get("props", ""))
             full = sum(1 for p in query["properties"] if prop_matches(props, p))
@@ -602,6 +633,43 @@ class EcomDeterministicSolver:
         if not rows:
             return None
         return sorted(rows, key=score, reverse=True)[0]
+
+    def product_candidate_rows(self, query: dict[str, Any]) -> list[dict[str, str]]:
+        import re
+        family_tokens = [
+            token for token in re.findall(r"[A-Za-z0-9]+", query["family"])
+            if token.lower() not in {query["brand"].lower()}
+        ]
+        filters = [
+            f"lower(p.brand)=lower({quote(query['brand'])})",
+            f"lower(p.name) like lower('%' || {quote(query['kind'])} || '%')",
+        ]
+        filters.extend(f"lower(p.name) like lower('%' || {quote(token)} || '%')" for token in family_tokens)
+        rows = self.sql("select p.sku,p.path,p.name from products p where " + " and ".join(filters) + " order by p.sku")
+        if not rows:
+            return []
+        return self.attach_product_props(rows)
+
+    def attach_product_props(self, rows: list[dict[str, str]]) -> list[dict[str, str]]:
+        sku_list = ",".join(quote(row.get("sku", "")) for row in rows)
+        prop_rows = self.sql("select sku,group_concat(key || '=' || value_text, ';') props "
+                             f"from product_properties where sku in ({sku_list}) group by sku")
+        props = {row.get("sku", ""): row.get("props", "") for row in prop_rows}
+        for row in rows:
+            row["props"] = props.get(row.get("sku", ""), "")
+        return rows
+
+    def resolve_product_exact(self, phrase: str) -> dict[str, str] | None:
+        query = parse_product_phrase(phrase)
+        if not query:
+            return None
+        product = self.resolve_product(phrase)
+        if not product:
+            return None
+        props = prop_index(product.get("props", ""))
+        if all(prop_matches(props, prop) for prop in query["properties"]):
+            return product
+        return None
 
 
 def slug(value: str) -> str:
@@ -665,7 +733,7 @@ def parse_property(text: str) -> dict[str, str] | None:
         return None
     split = len(words) - 1
     for i, word in enumerate(words):
-        if word.lower() in {"type", "source", "family", "platform", "contents", "class", "count", "size", "coating"}:
+        if word.lower() in {"type", "source", "family", "platform", "contents", "class", "count", "size", "coating", "surface"}:
             split = min(i + 1, len(words) - 1); break
     if len(words) >= 3 and words[-1].lower() in {"mm", "ml", "m", "cm", "l", "w", "a", "k", "lm", "v", "pcs", "pc", "gsm"}:
         split = len(words) - 2
