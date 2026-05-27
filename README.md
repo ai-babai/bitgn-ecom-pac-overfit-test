@@ -4,7 +4,7 @@
 
 `bitgn-ecom-pac-overfit-test` - экспериментальный overfit-тест для BitGN-бенчмарков ECOM/PAC1. Проект проверяет, насколько далеко можно продвинуть benchmark-задачи заранее написанным детерминированным кодом и правилами, без AI/LLM-вызовов во время выполнения задач.
 
-Отдельная Rust-wrapper версия сохранена в ветке [`ecom-rust-v011-leaderboard`](https://github.com/ai-babai/bitgn-ecom-pac-overfit-test/tree/ecom-rust-v011-leaderboard): ECOM dev `48/48`, leaderboard `[@skifmax]-[code-without-llm]-[eniki-beniki]-[v013]`.
+Отдельная Rust-wrapper версия сохранена в ветке [`ecom-rust-v011-leaderboard`](https://github.com/ai-babai/bitgn-ecom-pac-overfit-test/tree/ecom-rust-v011-leaderboard): ECOM dev `50/50`, leaderboard `[@skifmax]-[code-without-llm]-[eniki-beniki]-[x14]`, local run `rust-ecom-leaderboard-x14-04`.
 
 Короткая навигация: подробная [установка и проверка окружения](#установка-и-проверка-окружения) вынесена в конец README.
 
