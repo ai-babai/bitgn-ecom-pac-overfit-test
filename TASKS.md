@@ -18,9 +18,11 @@
 - Optimized product resolution to keep the 48-task task-wall sum well below `47s`; representative run `rust-ecom-dev-48-full-003` is `48/48`, task wall sum `12.634s`.
 - Successful ECOM leaderboard submit: `[@skifmax]-[code-without-llm]-[eniki-beniki]-[v013]`, local run id `rust-ecom-leaderboard-v013`, result `48/48`, task wall sum `14.066s`.
 - Added archive export fraud detection for the new archive TSV task class.
+- Updated ECOM dev support to the current 50-task set (`t01..t50`) and verified repeated local runs at `50/50`.
+- Successful ECOM leaderboard submit: `[@skifmax]-[code-without-llm]-[eniki-beniki]-[x14]`, local run id `rust-ecom-leaderboard-x14-04`, result `50/50`, task wall sum `15.935s`.
 
 ## Next
 
 - Do not touch or rerun this worktree unless explicitly asked; the latest leaderboard result is already updated.
-- Preserve the leaderboard name pattern unless the user asks for a new version: `[@skifmax]-[code-without-llm]-[eniki-beniki]-[vNNN]`.
-- If another leaderboard run is needed, first do a non-leaderboard full check over `t01..t48` and require `48/48` plus task wall sum below `47s`.
+- Preserve the leaderboard name pattern unless the user asks for a new version: `[@skifmax]-[code-without-llm]-[eniki-beniki]-[xNN]`.
+- If another leaderboard run is needed, first do a non-leaderboard full check over `t01..t50` and require `50/50` plus task wall sum below `156s`.

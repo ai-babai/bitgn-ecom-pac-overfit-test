@@ -1,6 +1,6 @@
 # bitgn-ecom-run Rust Wrapper Index
 
-Rust-wrapper deterministic BitGN runner. Current validated target: ECOM dev 48-task suite.
+Rust-wrapper deterministic BitGN runner. Current validated target: ECOM dev 50-task suite.
 
 ## Current Shape
 
@@ -16,7 +16,7 @@ Rust-wrapper deterministic BitGN runner. Current validated target: ECOM dev 48-t
 
 ## Current Capability
 
-- ECOM dev `t01..t48`: `48/48`.
-- Best committed local summary: `rust-ecom-dev-48-full-003`, task wall sum `12.634s`.
-- Successful leaderboard entry: `[@skifmax]-[code-without-llm]-[eniki-beniki]-[v013]`.
+- ECOM dev `t01..t50`: `50/50`.
+- Best committed local summary: `rust-ecom-dev-50-full-final-003`, task wall sum `16.755s`.
+- Successful leaderboard entry: `[@skifmax]-[code-without-llm]-[eniki-beniki]-[x14]`.
 - The solution is code-only and intentionally overfit to known dev tasks.

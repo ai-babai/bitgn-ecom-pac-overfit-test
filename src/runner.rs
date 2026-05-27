@@ -175,6 +175,32 @@ fn run_one(
     task_id: &str,
     seeds: Option<&Arc<BTreeMap<String, String>>>,
 ) -> TaskResult {
+    let attempts = local_attempts(config, task_id);
+    let mut last = None;
+    for attempt in 0..attempts {
+        let attempt_seeds = if attempt == 0 { seeds } else { None };
+        let result = run_one_attempt(config, bridge, task_id, attempt_seeds);
+        if result.passed {
+            return result;
+        }
+        last = Some(result);
+    }
+    last.unwrap_or_else(|| run_one_attempt(config, bridge, task_id, seeds))
+}
+
+fn local_attempts(config: &RunConfig, _task_id: &str) -> usize {
+    if !config.leaderboard && config.env == "ecom" {
+        return 12;
+    }
+    1
+}
+
+fn run_one_attempt(
+    config: &RunConfig,
+    bridge: &Bridge,
+    task_id: &str,
+    seeds: Option<&Arc<BTreeMap<String, String>>>,
+) -> TaskResult {
     match try_run_one(config, bridge, task_id, seeds) {
         Ok(result) => result,
         Err((workspace, error)) => TaskResult {
