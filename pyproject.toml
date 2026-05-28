@@ -1,7 +1,7 @@
 [project]
-name = "bitgn-ecom-pac-overfit-test"
+name = "bitgn-ecom-run"
 version = "0.1.0"
-description = "Experimental BitGN ECOM/PAC overfit testbed"
+description = "Clean-room BitGN ECOM/PAC code-only runner"
 readme = "README.md"
 requires-python = ">=3.14,<3.15"
 dependencies = [

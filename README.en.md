@@ -1,20 +1,122 @@
-# bitgn-ecom-pac-overfit-test
+# bitgn-ecom-run rust wrapper
 
 [Русский](README.ru.md)
 
-`bitgn-ecom-pac-overfit-test` is an experimental overfit testbed for BitGN ECOM/PAC1 benchmarks. The project checks how far benchmark tasks can be pushed with pre-written deterministic code and rules, without AI/LLM calls during task execution.
+This branch contains the Rust-wrapper variant of the BitGN code-only runner.
+The current focus is ECOM dev. The solution uses deterministic code only: no LLM
+calls and no agentic reasoning loop. It is an intentional overfit experiment for
+the known dev suite: useful as a fast baseline, not evidence of transfer to unseen
+tasks.
 
-A separate Rust-wrapper version is preserved in the [`ecom-rust-v011-leaderboard`](https://github.com/ai-babai/bitgn-ecom-pac-overfit-test/tree/ecom-rust-v011-leaderboard) branch: ECOM dev `50/50`, leaderboard `[@skifmax]-[code-without-llm]-[eniki-beniki]-[x14]`, local run `rust-ecom-leaderboard-x14-04`.
+## Status
 
-Quick navigation: detailed [environment setup and verification](#environment-setup-and-verification) is at the end of this README.
+| Benchmark | Env | Run id | Tasks | Result | Workers | Leaderboard | Wall sum |
+| --- | --- | --- | ---: | ---: | ---: | --- | ---: |
+| `ecom1_dev` | dev | `rust-ecom-dev-50-full-final-003` | 50 | `50/50` | 10 | no | `16.755s` local |
+| `ecom1_dev` | dev | `rust-ecom-leaderboard-x14-04` | 50 | `50/50` | 10 | yes | `15.935s` local |
 
-## No-Leaderboard Usage
+Latest successful leaderboard entry:
 
-ECOM dev:
+```text
+[@skifmax]-[code-without-llm]-[eniki-beniki]-[x14]
+```
+
+`Wall sum` is the sum of per-task `wall_seconds`. The visible BitGN leaderboard
+time is measured by the server from the `start_run`/`submit_run` lifecycle, so it
+can differ from local task wall. For ECOM leaderboard runs in this branch, prepare
+must use trial-id-only seeds and must not pre-start all trials before worker execution.
+
+## Timing Snapshot
+
+Measurement: `rust-ecom-dev-50-full-final-003`, ECOM dev `t01..t50`, no leaderboard.
+
+| Benchmark | Run id | Tasks | Workers | Task wall sum | Avg task | Median | P95 | Slowest | Tool calls sum | Read/search/sql | Action | Completion | Overhead |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `ecom1_dev` | `rust-ecom-dev-50-full-final-003` | 50 | 10 | `16.755s` | `0.335s` | not recomputed | not recomputed | not recomputed | not recomputed | not recomputed | not recomputed | not recomputed | not recomputed |
+
+The slowest tasks in this snapshot are inventory/count, quote-check, and archive-fraud classes; detailed stage timing was not recomputed for the 50-task set.
+
+## Architecture
+
+```text
+bitgn-ecom-run-rust
+├── src/
+│   ├── main.rs        # CLI entrypoint
+│   ├── config.rs      # env/tasks/workers/leaderboard/fail-fast/run limits
+│   ├── runner.rs      # parallel task execution and guarded leaderboard submit
+│   ├── bridge.rs      # Rust -> local Python BitGN API boundary
+│   ├── artifacts.rs   # run_config, manifest, summary artifacts
+│   └── types.rs       # TaskResult contract
+├── tools/
+│   ├── bitgn_bridge.py  # Python CLI bridge between Rust and BitGN runtime
+│   ├── bitgn_runtime.py # BitGN clients, adapters, gateway, workspace helpers
+│   ├── ecom_solver.py   # ECOM deterministic solver families
+│   └── pac1_solver.py   # PAC1 deterministic solver kept from baseline
+├── rules/              # rule selector names passed into run config
+├── scripts/            # local quality checks
+└── docs/               # principles and saved result summary
+```
+
+Main flow:
+
+1. The Rust CLI reads run configuration.
+2. For ECOM, the runner prepares one BitGN run and trial-id-only seeds.
+3. `runner.rs` schedules tasks across worker threads.
+4. `bridge.rs` calls `.venv/bin/python tools/bitgn_bridge.py`.
+5. The Python bridge starts a trial, creates the workspace, invokes the deterministic
+   solver, reports completion, and closes the trial.
+6. Rust writes artifacts and submits to leaderboard only when `--leaderboard true`
+   is enabled, every task passed, and `--max-wall-sum-seconds` is satisfied.
+
+## Why Rust And Python
+
+Rust owns the outer runner: CLI, worker threads, fail-fast behavior, artifacts,
+`TaskResult` aggregation, and the pre-submit gate. Python remains at the BitGN
+runtime boundary because generated packages and VM clients are consumed from Python.
+For speed, Rust now calls `.venv/bin/python` directly instead of `uv run` per task.
+
+## Leaderboard Notes
+
+- ECOM leaderboard prepare must use trial-id-only seeds.
+- Do not call `start_trial` for every ECOM task before worker execution; that inflates
+  server-side leaderboard time.
+- Before submit, run a local non-leaderboard `t01..t50` check and require `50/50`.
+- Current naming pattern:
+
+```text
+[@skifmax]-[code-without-llm]-[eniki-beniki]-[xNN]
+```
+
+## Installation
 
 ```bash
-TASKS=$(printf 't%02d,' $(seq 1 44)); TASKS=${TASKS%,}
-uv run python -m bitgn_run.cli run \
+cd /srv/aika-os/bitgn/code/bitgn-ecom-run-rust
+
+# Install Rust if needed:
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+. "$HOME/.cargo/env"
+
+# Install uv if needed:
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Python env and dependencies:
+uv sync
+
+# Build the runner:
+cargo build
+```
+
+Leaderboard runs require a BitGN API key through the environment or the standard
+local key file. Do not print or commit secrets. `runs/`, `.venv/`, `target/`, and
+cache directories are intentionally gitignored.
+
+## Usage
+
+ECOM dev without leaderboard:
+
+```bash
+TASKS=$(printf 't%02d,' $(seq 1 50)); TASKS=${TASKS%,}
+target/debug/bitgn-ecom-run run \
   --env ecom \
   --run-id ecom-dev-local \
   --leaderboard false \
@@ -24,160 +126,37 @@ uv run python -m bitgn_run.cli run \
   --artifact-dir runs
 ```
 
-PAC1 dev:
+ECOM dev leaderboard submit with a wall-sum gate:
 
 ```bash
-TASKS=$(printf 't%02d,' $(seq 1 43)); TASKS=${TASKS%,}
-uv run python -m bitgn_run.cli run \
-  --env pac1 \
-  --run-id pac1-dev-local \
-  --leaderboard false \
-  --fail-fast false \
+TASKS=$(printf 't%02d,' $(seq 1 50)); TASKS=${TASKS%,}
+target/debug/bitgn-ecom-run run \
+  --env ecom \
+  --run-id rust-ecom-leaderboard-xNN \
+  --run-name '[@skifmax]-[code-without-llm]-[eniki-beniki]-[xNN]' \
+  --leaderboard true \
+  --fail-fast true \
   --workers 10 \
   --tasks "$TASKS" \
-  --artifact-dir runs
+  --artifact-dir runs \
+  --max-wall-sum-seconds 156
 ```
 
-PAC1 prod blind:
+PAC1 commands still exist in the CLI, but this branch was last validated for ECOM dev.
+Use the Python-only mainline for current PAC1 docs/results unless this branch is
+explicitly revalidated.
+
+## Checks
 
 ```bash
-TASKS=$(printf 't%03d,' $(seq 0 103)); TASKS=${TASKS%,}
-uv run python -m bitgn_run.cli run \
-  --env pac1-prod \
-  --run-id pac1-prod-blind-local \
-  --leaderboard false \
-  --fail-fast false \
-  --workers 10 \
-  --tasks "$TASKS" \
-  --artifact-dir runs
-```
-
-## Python-Only Results
-
-| Benchmark | Env | Run id | Tasks | Result | Workers | Leaderboard | Task wall sum | Elapsed |
-| --- | --- | --- | ---: | ---: | ---: | --- | ---: | ---: |
-| `ecom1_dev` | dev | `leaderboard-ecom-dev-eniki-beniki-v007` | 44 | `44/44` | 10 | yes | `30.181s` | n/a |
-| `pac1_dev` | dev | `leaderboard-pac1-dev-eniki-beniki-v007` | 43 | `43/43` | 10 | yes | `93.619s` | n/a |
-| `pac1_prod` | prod blind | `pac1-prod-blind-public-verify-001` | 104 | `20/104` | 10 | no | `96.249s` | `11.901s` |
-
-For dev rows, `Leaderboard=yes` means these are fresh leaderboard runs named `[@skifmax]-[code-without-llm]-[eniki-beniki]-[v007]`. `pac1_prod` is a blind run without leaderboard. `Task wall sum` is the sum of per-task durations; `Elapsed` is the real wall-clock time for the whole run. Dev `Elapsed` was not captured with a local timer, so it is marked `n/a`.
-
-## Python-Only Timing Snapshot
-
-| Benchmark | Run id | Tasks | Workers | Task wall sum | Avg task | Median | P95 | Tool calls sum | Read/search stage | Action stage | Completion stage | Overhead |
-| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `ecom1_dev` | `leaderboard-ecom-dev-eniki-beniki-v007` | 44 | 10 | `30.181s` | `0.686s` | `0.417s` | `1.081s` | `21.985s` | `9.280s` | `11.347s` | `1.358s` | `8.196s` |
-| `pac1_dev` | `leaderboard-pac1-dev-eniki-beniki-v007` | 43 | 10 | `93.619s` | `2.177s` | `1.532s` | `4.733s` | `89.348s` | `80.916s` | `4.025s` | `4.407s` | `4.271s` |
-| `pac1_prod` | `pac1-prod-blind-public-verify-001` | 104 | 10 | `96.249s` | `0.925s` | `0.554s` | `1.761s` | `87.270s` | `76.401s` | `0.000s` | `10.869s` | `8.979s` |
-
-## Architecture
-
-```text
-bitgn-ecom-pac-overfit-test
-├── bitgn_run/
-│   ├── cli.py        # CLI entrypoint
-│   ├── config.py     # env/tasks/workers/leaderboard/fail-fast/run limits
-│   ├── runner.py     # parallel task execution and guarded leaderboard submit
-│   ├── artifacts.py  # run_config, manifest, summary artifacts
-│   └── types.py      # TaskResult contract
-├── tools/
-│   ├── bitgn_bridge.py  # callable task lifecycle and legacy CLI commands
-│   ├── bitgn_runtime.py # BitGN API client, adapters, gateway, workspace
-│   ├── ecom_solver.py   # ECOM deterministic solver
-│   └── pac1_solver.py   # PAC1 deterministic solver
-├── rules/              # rule selector names passed into run config
-└── scripts/            # local quality checks
-```
-
-Main flow: the Python CLI reads run configuration, schedules tasks across worker
-threads, calls the Python task lifecycle directly, writes artifacts, and submits
-to leaderboard only when `--leaderboard true` is enabled and result/time gates pass.
-
-## Files Of Interest
-
-To inspect the accumulated heuristics, rules, and task instructions that currently drive solving, start here:
-
-- [tools/ecom_solver.py](tools/ecom_solver.py) - deterministic solver for ECOM tasks.
-- [tools/pac1_solver.py](tools/pac1_solver.py) - deterministic solver for PAC1 tasks.
-- [tools/bitgn_runtime.py](tools/bitgn_runtime.py) - shared BitGN tool gateway and artifact writer.
-
-## Important Limitation
-
-This is a strong code overfit to known dev tasks, with no LLM calls and no general
-reasoning loop. The PAC1 prod gap remains the key warning: dev results should not
-be treated as evidence of transfer to unseen tasks.
-
-## Environment Setup And Verification
-
-This section is reference material: installation is not the main purpose of the repository, but these steps are enough to run it locally.
-
-### Requirements
-
-- Linux/macOS shell with `bash`.
-- `git` and `curl`.
-- `uv` for Python and dependency management.
-- BitGN harness access.
-- BitGN API key for ECOM and leaderboard runs. PAC1 playground usually starts without a key, but the shared runner can read the same key.
-
-### 1. Clone the repository
-
-```bash
-git clone https://github.com/ai-babai/bitgn-ecom-pac-overfit-test.git
-cd bitgn-ecom-pac-overfit-test
-```
-
-If the local checkout was created before the repository rename:
-
-```bash
-git remote set-url origin https://github.com/ai-babai/bitgn-ecom-pac-overfit-test.git
-```
-
-### 2. Install uv and Python
-
-```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-uv python install 3.14
-uv sync
-```
-
-`uv sync` installs dependencies from `pyproject.toml` and `uv.lock`, including the official BitGN generated packages.
-
-### 3. Provide the BitGN API key
-
-You can use an environment variable:
-
-```bash
-export BITGN_API_KEY="..."
-```
-
-Or the standard local file:
-
-```bash
-mkdir -p ~/.bitgn
-printf '%s\n' '...' > ~/.bitgn/bitgn-api-key
-chmod 600 ~/.bitgn/bitgn-api-key
-```
-
-`BITGN_ECOM_API_KEY`, `BITGN_API_KEY_FILE`, and `BITGN_ECOM_API_KEY_FILE` are also supported. Do not commit secrets or print them into logs.
-
-### 4. Verify the environment
-
-```bash
-uv run python -m py_compile bitgn_run/*.py tools/*.py
+.venv/bin/python -m py_compile tools/bitgn_bridge.py tools/bitgn_runtime.py tools/ecom_solver.py tools/pac1_solver.py
+cargo fmt -- --check
+cargo test
 scripts/check_code_limits.py
 ```
 
-Minimal smoke run without leaderboard:
+## Security Hygiene
 
-```bash
-uv run python -m bitgn_run.cli run \
-  --env pac1 \
-  --run-id smoke-pac1-t01 \
-  --leaderboard false \
-  --fail-fast true \
-  --workers 1 \
-  --tasks t01 \
-  --artifact-dir runs
-```
-
-Artifacts are written to `runs/`; this directory is intentionally not committed.
+- Do not commit API keys, `.env`, local key files, `.venv/`, `runs/`, or `target/`.
+- Before pushing, run a secret-oriented grep over tracked files.
+- Keep leaderboard names free of credentials or local paths.

@@ -1,21 +1,22 @@
-# bitgn-ecom-pac-overfit-test Index
+# bitgn-ecom-run Rust Wrapper Index
 
-Clean-room deterministic BitGN ECOM/PAC runner.
+Rust-wrapper deterministic BitGN runner. Current validated target: ECOM dev 50-task suite.
 
 ## Current Shape
 
-- `bitgn_run/` - Python CLI, config parser, parallel runner, artifacts, and result contracts.
-- `tools/bitgn_bridge.py` - callable task lifecycle plus legacy single-task CLI commands.
+- `src/` - Rust CLI, bridge, runner, artifacts, submit gate, and task result contract.
+- `tools/bitgn_bridge.py` - local Python CLI bridge between Rust and BitGN runtime.
 - `tools/bitgn_runtime.py` - clean-room BitGN API client, environment adapters, gateway, and workspace helpers.
-- `tools/ecom_solver.py` - deterministic ECOM solver families.
-- `tools/pac1_solver.py` - deterministic PAC1 solver families.
+- `tools/ecom_solver.py` - ECOM deterministic solver families for the current dev suite.
 - `rules/` - versionable rule registry for enabled deterministic rule families.
 - `docs/principles.md` - project coding and runtime principles.
-- `scripts/check_code_limits.py` - local Python code-size guardrail.
+- `docs/results.md` - committed summary of the latest validated local and leaderboard runs.
+- `scripts/check_code_limits.py` - local code-size guardrail.
 - `runs/` - ignored local run artifacts.
 
-## Capability
+## Current Capability
 
-The current branch is Python-only and solves ECOM dev and PAC1 dev without LLM
-calls. It is intentionally a code-overfit experiment; use PAC1 prod as the sanity
-check for transfer to unseen tasks.
+- ECOM dev `t01..t50`: `50/50`.
+- Best committed local summary: `rust-ecom-dev-50-full-final-003`, task wall sum `16.755s`.
+- Successful leaderboard entry: `[@skifmax]-[code-without-llm]-[eniki-beniki]-[x14]`.
+- The solution is code-only and intentionally overfit to known dev tasks.
