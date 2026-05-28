@@ -48,10 +48,7 @@ def prepare_leaderboard(args: argparse.Namespace) -> int:
     trial_ids = [str(item) for item in run.trial_ids]
     if len(trial_ids) < len(task_ids):
         raise SystemExit(f"leaderboard run {run_id} returned only {len(trial_ids)} trial ids for {len(task_ids)} tasks")
-    if args.env.startswith("pac1"):
-        seeds = prepare_trial_id_only_seeds(run_id, trial_ids, task_ids)
-    else:
-        seeds = prepare_trial_seeds(client, run_id, trial_ids, task_ids)
+    seeds = prepare_trial_id_only_seeds(run_id, trial_ids, task_ids)
     emit({"ok": True, "run_id": run_id, "run_name": run_name, "seeds": seeds})
     return 0
 
