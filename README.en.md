@@ -12,13 +12,13 @@ tasks.
 
 | Benchmark | Env | Run id | Tasks | Result | Workers | Leaderboard | Wall sum |
 | --- | --- | --- | ---: | ---: | ---: | --- | ---: |
-| `ecom1_dev` | dev | `rust-ecom-dev-50-full-final-003` | 50 | `50/50` | 10 | no | `16.755s` local |
-| `ecom1_dev` | dev | `rust-ecom-leaderboard-x14-04` | 50 | `50/50` | 10 | yes | `15.935s` local |
+| `ecom1_dev` | dev | `rust-ecom-dev-53-overfit-a11` | 53 | `53/53` | 10 | no | `35.809s` local |
+| `ecom1_dev` | dev | `rust-ecom-leaderboard-x15` | 53 | `53/53` | 16 | yes | `13.628s` local, `0:15` on site |
 
 Latest successful leaderboard entry:
 
 ```text
-[@skifmax]-[code-without-llm]-[eniki-beniki]-[x14]
+[@skifmax]-[code-without-llm]-[eniki-beniki]-[x15]
 ```
 
 `Wall sum` is the sum of per-task `wall_seconds`. The visible BitGN leaderboard
@@ -28,13 +28,13 @@ must use trial-id-only seeds and must not pre-start all trials before worker exe
 
 ## Timing Snapshot
 
-Measurement: `rust-ecom-dev-50-full-final-003`, ECOM dev `t01..t50`, no leaderboard.
+Measurement: `rust-ecom-leaderboard-x15`, ECOM dev `t01..t53`, leaderboard.
 
 | Benchmark | Run id | Tasks | Workers | Task wall sum | Avg task | Median | P95 | Slowest | Tool calls sum | Read/search/sql | Action | Completion | Overhead |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `ecom1_dev` | `rust-ecom-dev-50-full-final-003` | 50 | 10 | `16.755s` | `0.335s` | not recomputed | not recomputed | not recomputed | not recomputed | not recomputed | not recomputed | not recomputed | not recomputed |
+| `ecom1_dev` | `rust-ecom-leaderboard-x15` | 53 | 16 | `13.628s` | `0.257s` | not recomputed | not recomputed | not recomputed | not recomputed | not recomputed | not recomputed | not recomputed | not recomputed |
 
-The slowest tasks in this snapshot are inventory/count, quote-check, and archive-fraud classes; detailed stage timing was not recomputed for the 50-task set.
+The slowest tasks in this snapshot are inventory/count, quote-check, and archive-fraud classes; detailed stage timing was not recomputed for the 53-task set.
 
 ## Architecture
 
@@ -80,7 +80,7 @@ For speed, Rust now calls `.venv/bin/python` directly instead of `uv run` per ta
 - ECOM leaderboard prepare must use trial-id-only seeds.
 - Do not call `start_trial` for every ECOM task before worker execution; that inflates
   server-side leaderboard time.
-- Before submit, run a local non-leaderboard `t01..t50` check and require `50/50`.
+- Before submit, run a local non-leaderboard `t01..t53` check and require `53/53`.
 - Current naming pattern:
 
 ```text
@@ -115,7 +115,7 @@ cache directories are intentionally gitignored.
 ECOM dev without leaderboard:
 
 ```bash
-TASKS=$(printf 't%02d,' $(seq 1 50)); TASKS=${TASKS%,}
+TASKS=$(printf 't%02d,' $(seq 1 53)); TASKS=${TASKS%,}
 target/debug/bitgn-ecom-run run \
   --env ecom \
   --run-id ecom-dev-local \
@@ -129,7 +129,7 @@ target/debug/bitgn-ecom-run run \
 ECOM dev leaderboard submit with a wall-sum gate:
 
 ```bash
-TASKS=$(printf 't%02d,' $(seq 1 50)); TASKS=${TASKS%,}
+TASKS=$(printf 't%02d,' $(seq 1 53)); TASKS=${TASKS%,}
 target/debug/bitgn-ecom-run run \
   --env ecom \
   --run-id rust-ecom-leaderboard-xNN \
