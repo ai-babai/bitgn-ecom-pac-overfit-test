@@ -34,13 +34,15 @@ impl Bridge {
         self.run_json(args)
     }
 
-    pub fn submit_leaderboard(&self, run_id: &str) -> Result<Value, String> {
+    pub fn list_tasks(&self, env: &str) -> Result<Value, String> {
         let mut args = self.base_args();
-        args.extend([
-            "submit-leaderboard".into(),
-            "--run-id".into(),
-            run_id.into(),
-        ]);
+        args.extend(["list-tasks".into(), "--env".into(), env.into()]);
+        self.run_json(args)
+    }
+
+    pub fn finalize_run(&self, run_id: &str) -> Result<Value, String> {
+        let mut args = self.base_args();
+        args.extend(["finalize-run".into(), "--run-id".into(), run_id.into()]);
         self.run_json(args)
     }
 

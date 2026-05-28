@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 import uuid
 from dataclasses import dataclass
@@ -17,6 +18,7 @@ from bitgn.harness_pb2 import (
     StartTrialRequest,
     SubmitRunRequest,
 )
+from connectrpc.errors import ConnectError
 from bitgn.vm.ecom.ecom_connect import EcomRuntimeClientSync
 from bitgn.vm.ecom.ecom_pb2 import (
     AnswerRequest as EcomAnswerRequest,
@@ -160,17 +162,55 @@ def now() -> str:
 
 def start_run_with_retry(client: HarnessServiceClientSync, request: StartRunRequest) -> Any:
     last_error: Exception | None = None
-    for attempt in range(5):
+    for attempt in range(8):
         try:
             return client.start_run(request)
         except Exception as exc:
             last_error = exc
-            if "database is locked" not in str(exc).lower():
+            delay = retry_delay_seconds(exc)
+            if delay is None and "database is locked" not in str(exc).lower():
                 raise
-            time.sleep(0.25 * (attempt + 1))
+            time.sleep(delay if delay is not None else 0.25 * (attempt + 1))
     if last_error:
         raise last_error
     raise RuntimeError("start_run failed")
+
+
+def call_with_rate_retry(fn: Callable[[], Any]) -> Any:
+    last_error: Exception | None = None
+    for attempt in range(8):
+        try:
+            return fn()
+        except Exception as exc:
+            last_error = exc
+            delay = retry_delay_seconds(exc)
+            if delay is None:
+                raise
+            time.sleep(delay if delay > 0 else min(2.0, 0.25 * (attempt + 1)))
+    if last_error:
+        raise last_error
+    raise RuntimeError("retryable call failed")
+
+
+def retry_delay_seconds(exc: Exception) -> float | None:
+    text = str(exc)
+    lower = text.lower()
+    if isinstance(exc, ConnectError) and "resource_exhausted" not in lower and "retry" not in lower and "rate limit" not in lower:
+        return None
+    if "resourceexhausted" not in lower and "resource_exhausted" not in lower and "retry-after" not in lower and "rate limit" not in lower:
+        return None
+    match = re.search(r"retry-after[:= ]+(\d+(?:\.\d+)?)", lower)
+    duration = re.search(r"retry after\s+(?:(\d+)h)?(?:(\d+)m)?(?:(\d+(?:\.\d+)?)s)?", lower)
+    if duration and duration.group(0).strip() != "retry after":
+        hours = float(duration.group(1) or 0)
+        minutes = float(duration.group(2) or 0)
+        seconds = float(duration.group(3) or 0)
+        return hours * 3600 + minutes * 60 + seconds
+    if not match:
+        match = re.search(r"retry after\D+(\d+(?:\.\d+)?)", lower)
+    if match:
+        return float(match.group(1))
+    return 30.0
 
 
 class BitgnAdapter:
@@ -205,11 +245,11 @@ class BitgnAdapter:
                 instruction=str(trial_seed.get("instruction", "")),
             )
         if trial_seed and trial_seed.get("trial_id"):
-            raw = client.start_trial(StartTrialRequest(trial_id=str(trial_seed["trial_id"])))
+            raw = call_with_rate_retry(lambda: client.start_trial(StartTrialRequest(trial_id=str(trial_seed["trial_id"]))))
             return StartedTrial(str(raw.trial_id), str(raw.harness_url), str(raw.instruction))
         if self.env == "pac1":
-            raw = client.start_playground(
-                StartPlaygroundRequest(benchmark_id=self.benchmark_id, task_id=task_id)
+            raw = call_with_rate_retry(
+                lambda: client.start_playground(StartPlaygroundRequest(benchmark_id=self.benchmark_id, task_id=task_id))
             )
             return StartedTrial(str(raw.trial_id), str(raw.harness_url), str(raw.instruction))
         return self.start_ecom_trial(client=client, task_id=task_id, api_key=api_key, log=log)
@@ -233,7 +273,7 @@ class BitgnAdapter:
             ),
         )
         for trial_id in run.trial_ids:
-            trial = client.start_trial(StartTrialRequest(trial_id=str(trial_id)))
+            trial = call_with_rate_retry(lambda tid=str(trial_id): client.start_trial(StartTrialRequest(trial_id=tid)))
             if str(trial.task_id) == task_id:
                 return StartedTrial(str(trial.trial_id), str(trial.harness_url), str(trial.instruction))
         raise RuntimeError(f"ECOM run {run.run_id} did not include requested task {task_id}")
@@ -471,7 +511,7 @@ class ToolGateway:
         import csv
         from io import StringIO
 
-        out = self.call(step=0, tool="exec", args={"path": "/bin/sql", "stdin": query})
+        out = self.call(step=0, tool="exec", args={"path": "/bin/sql", "stdin": ecom_analysis_sql(query)})
         return list(csv.DictReader(StringIO(str(out.get("stdout") or ""))))
 
     def append_tool_call(self, *, step: int, tool: str, args: dict[str, Any], ts_start: float, result: Any, error: str | None) -> None:
@@ -523,6 +563,24 @@ def refs_from_args(args: dict[str, Any]) -> list[str]:
 
 def sql_quote(value: str) -> str:
     return "'" + str(value).replace("'", "''") + "'"
+
+
+def ecom_analysis_sql(query: str) -> str:
+    if not query.lstrip().lower().startswith("select"):
+        return query
+    return """
+WITH payments AS (
+  SELECT payment_id AS id, record_path AS path, basket_id,
+         is_archived_basket_reference AS basket_archived, customer_id, store_id,
+         payment_amount_cents AS amount_cents, payment_currency AS currency,
+         payment_status AS status, payment_created_at AS created_at,
+         payment_method_fingerprint, device_fingerprint,
+         observed_latitude AS observed_lat, observed_longitude AS observed_lon,
+         three_ds_status, three_ds_failure_reason, three_ds_attempts,
+         three_ds_max_attempts
+  FROM main.payment_transactions
+)
+""" + query.lstrip()
 
 
 def safe_int(value: Any) -> int:

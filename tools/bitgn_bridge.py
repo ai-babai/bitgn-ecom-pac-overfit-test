@@ -10,8 +10,8 @@ from pathlib import Path
 from typing import Any
 
 from bitgn.harness_connect import HarnessServiceClientSync
-from bitgn.harness_pb2 import EndTrialRequest, StartRunRequest, StartTrialRequest, SubmitRunRequest
-from bitgn_runtime import BITGN_URL, BitgnAdapter, ToolGateway, create_task_workspace, open_task_workspace, start_run_with_retry
+from bitgn.harness_pb2 import EndTrialRequest, GetBenchmarkRequest, GetRunRequest, GetTrialRequest, StartRunRequest, StartTrialRequest, SubmitRunRequest
+from bitgn_runtime import BITGN_URL, BitgnAdapter, ToolGateway, call_with_rate_retry, create_task_workspace, open_task_workspace, start_run_with_retry
 from ecom_solver import EcomDeterministicSolver
 from pac1_solver import Pac1DeterministicSolver
 
@@ -48,11 +48,20 @@ def prepare_leaderboard(args: argparse.Namespace) -> int:
     trial_ids = [str(item) for item in run.trial_ids]
     if len(trial_ids) < len(task_ids):
         raise SystemExit(f"leaderboard run {run_id} returned only {len(trial_ids)} trial ids for {len(task_ids)} tasks")
-    if args.env.startswith("pac1") or args.env == "ecom":
+    if args.env.startswith("pac1"):
         seeds = prepare_trial_id_only_seeds(run_id, trial_ids, task_ids)
     else:
         seeds = prepare_trial_seeds(client, run_id, trial_ids, task_ids)
     emit({"ok": True, "run_id": run_id, "run_name": run_name, "seeds": seeds})
+    return 0
+
+
+def list_tasks(args: argparse.Namespace) -> int:
+    adapter = setup_adapter(args.env)
+    client = HarnessServiceClientSync(os.getenv("BENCHMARK_HOST") or BITGN_URL)
+    data = call_with_rate_retry(lambda: client.get_benchmark(GetBenchmarkRequest(benchmark_id=adapter.benchmark_id)))
+    tasks = [str(item.task_id) for item in data.tasks]
+    emit({"ok": True, "benchmark_id": adapter.benchmark_id, "tasks": tasks})
     return 0
 
 
@@ -89,7 +98,7 @@ def prepare_trial_seeds(
 
     def start_seed(trial_id: str) -> dict[str, str] | None:
         local_client = HarnessServiceClientSync(os.getenv("BENCHMARK_HOST") or BITGN_URL)
-        trial = local_client.start_trial(StartTrialRequest(trial_id=trial_id))
+        trial = call_with_rate_retry(lambda: local_client.start_trial(StartTrialRequest(trial_id=trial_id)))
         task_id = str(trial.task_id)
         if task_id not in requested:
             return None
@@ -144,9 +153,41 @@ def ordered_task_index(task_id: str) -> int:
 
 def submit_leaderboard(args: argparse.Namespace) -> int:
     client = HarnessServiceClientSync(os.getenv("BENCHMARK_HOST") or BITGN_URL)
-    client.submit_run(SubmitRunRequest(run_id=args.run_id, force=True))
+    call_with_rate_retry(lambda: client.submit_run(SubmitRunRequest(run_id=args.run_id, force=True)))
     emit({"ok": True, "run_id": args.run_id, "submitted": True})
     return 0
+
+
+def finalize_run(args: argparse.Namespace) -> int:
+    client = HarnessServiceClientSync(os.getenv("BENCHMARK_HOST") or BITGN_URL)
+    call_with_rate_retry(lambda: client.submit_run(SubmitRunRequest(run_id=args.run_id, force=True)))
+    run = call_with_rate_retry(lambda: client.get_run(GetRunRequest(run_id=args.run_id)))
+    trials = []
+    for head in run.trials:
+        trial = call_with_rate_retry(lambda tid=str(head.trial_id): client.get_trial(GetTrialRequest(trial_id=tid)))
+        trials.append(trial_score_payload(trial))
+    emit({
+        "ok": True,
+        "run_id": args.run_id,
+        "score_available": bool(run.score_available),
+        "score": float(run.score) if run.score_available else None,
+        "trials": trials,
+    })
+    return 0
+
+
+def trial_score_payload(value: Any) -> dict[str, Any]:
+    available = bool(getattr(value, "score_available", False))
+    score = float(value.score) if available else None
+    return {
+        "trial_id": str(value.trial_id),
+        "task_id": str(value.task_id),
+        "score_available": available,
+        "score": score,
+        "passed": score == 1.0 if available else None,
+        "score_detail": [str(item) for item in value.score_detail],
+        "error": str(getattr(value, "error", "") or "") or None,
+    }
 
 def start(args: argparse.Namespace) -> int:
     os.environ.setdefault("BENCHMARK_ID", "bitgn/ecom1-dev")
@@ -187,11 +228,10 @@ def finish(args: argparse.Namespace) -> int:
     ws = open_task_workspace(args.workspace)
     meta = json.loads((ws.root / "bridge_trial.json").read_text(encoding="utf-8"))
     client = HarnessServiceClientSync(os.getenv("BENCHMARK_HOST") or BITGN_URL)
-    result = client.end_trial(EndTrialRequest(trial_id=str(meta["trial_id"])))
-    score = float(result.score)
-    detail = [str(item) for item in result.score_detail]
-    ws.write_json(ws.score_path, {"score": score, "passed": score == 1.0, "score_detail": detail, "ts": now()})
-    emit({"ok": True, "task_id": meta.get("task_id"), "score": score, "passed": score == 1.0, "score_detail": detail})
+    result = call_with_rate_retry(lambda: client.end_trial(EndTrialRequest(trial_id=str(meta["trial_id"]))))
+    score_payload = end_trial_score_payload(result, meta.get("task_id"))
+    ws.write_json(ws.score_path, {**score_payload, "ts": now()})
+    emit({"ok": True, **score_payload})
     return 0
 
 
@@ -211,7 +251,7 @@ def run_task(args: argparse.Namespace) -> int:
     if args.leaderboard and trial_seed is None:
         raise SystemExit("leaderboard run-task requires --trial-seed")
     if args.leaderboard and trial_seed and not trial_seed.get("harness_url"):
-        raw_trial = client.start_trial(StartTrialRequest(trial_id=str(trial_seed["trial_id"])))
+        raw_trial = call_with_rate_retry(lambda: client.start_trial(StartTrialRequest(trial_id=str(trial_seed["trial_id"]))))
         actual_task_id = str(raw_trial.task_id)
         trial = adapter.start_trial(client=client, task_id=actual_task_id, trial_seed={"trial_id": str(raw_trial.trial_id), "harness_url": str(raw_trial.harness_url), "instruction": str(raw_trial.instruction)}, api_key=bitgn_api_key(), log=log)
     else:
@@ -241,23 +281,38 @@ def run_task(args: argparse.Namespace) -> int:
     payload = {"message": completion.get("message", ""), "outcome": completion.get("outcome", "OUTCOME_NONE_UNSUPPORTED"), "grounding_refs": refs}
     gateway.call(step=0, tool="report_completion", args=payload)
     ws.write_json(ws.submission_path, {"message": payload["message"], "answer": payload["message"], "outcome": payload["outcome"], "grounding_refs": refs})
-    result = client.end_trial(EndTrialRequest(trial_id=str(trial.trial_id)))
-    score = float(result.score)
-    detail = [str(item) for item in result.score_detail]
     wall_seconds = time.monotonic() - started
-    ws.write_json(ws.score_path, {"score": score, "passed": score == 1.0, "score_detail": detail, "ts": now(), "wall_seconds": wall_seconds})
+    result = call_with_rate_retry(lambda: client.end_trial(EndTrialRequest(trial_id=str(trial.trial_id))))
+    score_payload = end_trial_score_payload(result, actual_task_id)
+    ws.write_json(ws.score_path, {**score_payload, "ts": now(), "wall_seconds": wall_seconds})
     emit({
         "ok": True,
         "task_id": actual_task_id,
-        "passed": score == 1.0,
-        "score": score,
+        "trial_id": str(trial.trial_id),
+        "run_id": str(trial_seed.get("run_id", "") if isinstance(trial_seed, dict) else ""),
+        "passed": score_payload["passed"],
+        "score_available": score_payload["score_available"],
+        "score": score_payload["score"],
         "solver": report.get("solver", "deterministic"),
         "workspace": str(ws.root),
         "error": None,
-        "score_detail": detail,
+        "score_detail": score_payload["score_detail"],
         "wall_seconds": wall_seconds,
     })
     return 0
+
+
+def end_trial_score_payload(value: Any, task_id: Any) -> dict[str, Any]:
+    available = bool(getattr(value, "score_available", False))
+    score = float(value.score) if available else None
+    return {
+        "trial_id": str(value.trial_id),
+        "task_id": str(task_id or ""),
+        "score_available": available,
+        "score": score,
+        "passed": score == 1.0 if available else None,
+        "score_detail": [str(item) for item in value.score_detail],
+    }
 
 
 def protobuf_to_jsonable(value: Any) -> Any:
@@ -283,9 +338,15 @@ def main() -> int:
     p.add_argument("--tasks", required=True)
     p.add_argument("--run-name", default="")
     p.set_defaults(func=prepare_leaderboard)
+    p = sub.add_parser("list-tasks")
+    p.add_argument("--env", default="ecom")
+    p.set_defaults(func=list_tasks)
     p = sub.add_parser("submit-leaderboard")
     p.add_argument("--run-id", required=True)
     p.set_defaults(func=submit_leaderboard)
+    p = sub.add_parser("finalize-run")
+    p.add_argument("--run-id", required=True)
+    p.set_defaults(func=finalize_run)
     p = sub.add_parser("start")
     p.add_argument("--task-id", required=True)
     p.add_argument("--run-id", required=True)

@@ -2,32 +2,53 @@ use crate::artifacts::ArtifactWriter;
 use crate::bridge::Bridge;
 use crate::config::RunConfig;
 use crate::types::TaskResult;
+use serde_json::Value;
 use std::collections::{BTreeMap, VecDeque};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 
-pub fn run(config: RunConfig) -> Result<(), String> {
-    let writer = ArtifactWriter::new(&config)?;
+pub fn run(mut config: RunConfig) -> Result<(), String> {
     let bridge = Bridge::discover();
+    expand_task_aliases(&mut config, &bridge)?;
+    let writer = ArtifactWriter::new(&config)?;
     let prepared = if config.leaderboard || config.env == "ecom" {
         Some(prepare_leaderboard(&config, &bridge)?)
     } else {
         None
     };
     let seeds = prepared.as_ref().map(|prep| Arc::new(prep.seeds.clone()));
-    let results = if config.workers <= 1 {
+    let mut results = if config.workers <= 1 {
         run_sequential(&config, &bridge, &writer, seeds.clone())?
     } else {
         run_parallel(&config, &bridge, &writer, seeds.clone())?
     };
+    if let Some(prep) = prepared.as_ref() {
+        results = finalize_scores(&bridge, results, &prep.run_id)?;
+    }
     writer.finish(&results)?;
     if config.leaderboard {
         if let Some(prep) = prepared {
-            submit_if_eligible(&config, &bridge, &results, &prep.run_id)?;
+            ensure_leaderboard_eligible(&config, &results, &prep.run_id)?;
         }
     }
+    Ok(())
+}
+
+fn expand_task_aliases(config: &mut RunConfig, bridge: &Bridge) -> Result<(), String> {
+    if config.tasks.len() != 1 || config.tasks[0] != "all" {
+        return Ok(());
+    }
+    let value = bridge.list_tasks(&config.env)?;
+    let tasks = value
+        .get("tasks")
+        .and_then(|v| v.as_array())
+        .ok_or_else(|| "list-tasks returned no tasks".to_string())?;
+    config.tasks = tasks
+        .iter()
+        .filter_map(|item| item.as_str().map(str::to_string))
+        .collect();
     Ok(())
 }
 
@@ -58,14 +79,13 @@ fn prepare_leaderboard(config: &RunConfig, bridge: &Bridge) -> Result<Leaderboar
     Ok(LeaderboardPrep { run_id, seeds })
 }
 
-fn submit_if_eligible(
+fn ensure_leaderboard_eligible(
     config: &RunConfig,
-    bridge: &Bridge,
     results: &[TaskResult],
     leaderboard_run_id: &str,
 ) -> Result<(), String> {
     let all_tasks_completed = results.len() == config.tasks.len();
-    let all_passed = all_tasks_completed && results.iter().all(|r| r.passed);
+    let all_passed = all_tasks_completed && results.iter().all(|r| r.passed == Some(true));
     let all_timed = results.iter().all(|r| r.wall_seconds.is_some());
     let wall_sum: f64 = results.iter().filter_map(|r| r.wall_seconds).sum();
     let wall_ok = config
@@ -73,12 +93,11 @@ fn submit_if_eligible(
         .map(|limit| wall_sum < limit)
         .unwrap_or(true);
     if all_passed && all_timed && wall_ok {
-        bridge.submit_leaderboard(leaderboard_run_id)?;
         return Ok(());
     }
     Err(format!(
-        "leaderboard submit skipped: passed={}/{} wall_sum_seconds={:.3} limit={:?}",
-        results.iter().filter(|r| r.passed).count(),
+        "leaderboard run {leaderboard_run_id} closed but eligibility check failed: passed={}/{} wall_sum_seconds={:.3} limit={:?}",
+        results.iter().filter(|r| r.passed == Some(true)).count(),
         config.tasks.len(),
         wall_sum,
         config.max_wall_sum_seconds
@@ -95,7 +114,7 @@ fn run_sequential(
     for task_id in &config.tasks {
         let result = run_one(config, bridge, task_id, seeds.as_ref());
         writer.append_task(&result)?;
-        let failed = !result.passed;
+        let failed = result.passed == Some(false);
         results.push(result);
         if failed && config.fail_fast {
             break;
@@ -146,7 +165,7 @@ fn spawn_worker(
         let mut results = Vec::new();
         while let Some((idx, task_id)) = next_task(&queue, &stop) {
             let result = run_one(&config, &bridge, &task_id, seeds.as_ref());
-            if config.fail_fast && !result.passed {
+            if config.fail_fast && result.passed == Some(false) {
                 stop.store(true, Ordering::SeqCst);
             }
             results.push((idx, result));
@@ -180,7 +199,10 @@ fn run_one(
     for attempt in 0..attempts {
         let attempt_seeds = if attempt == 0 { seeds } else { None };
         let result = run_one_attempt(config, bridge, task_id, attempt_seeds);
-        if result.passed {
+        if result.passed == Some(true) {
+            return result;
+        }
+        if result.passed.is_none() {
             return result;
         }
         last = Some(result);
@@ -205,14 +227,60 @@ fn run_one_attempt(
         Ok(result) => result,
         Err((workspace, error)) => TaskResult {
             task_id: task_id.into(),
-            passed: false,
-            score: 0.0,
+            trial_id: None,
+            score_available: true,
+            passed: Some(false),
+            score: Some(0.0),
             solver: "error".into(),
             workspace,
             error: Some(error),
             score_detail: Vec::new(),
             wall_seconds: None,
         },
+    }
+}
+
+fn finalize_scores(
+    bridge: &Bridge,
+    mut results: Vec<TaskResult>,
+    run_id: &str,
+) -> Result<Vec<TaskResult>, String> {
+    let value = bridge.finalize_run(run_id)?;
+    for item in value
+        .get("trials")
+        .and_then(|v| v.as_array())
+        .into_iter()
+        .flatten()
+    {
+        apply_trial_score(&mut results, item);
+    }
+    Ok(results)
+}
+
+fn apply_trial_score(results: &mut [TaskResult], item: &Value) {
+    let trial_id = item.get("trial_id").and_then(|v| v.as_str());
+    let task_id = item.get("task_id").and_then(|v| v.as_str());
+    let result = results.iter_mut().find(|result| {
+        trial_id.is_some() && result.trial_id.as_deref() == trial_id
+            || task_id.is_some() && result.task_id == task_id.unwrap_or_default()
+    });
+    if let Some(result) = result {
+        result.score_available = item
+            .get("score_available")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        result.score = item.get("score").and_then(|v| v.as_f64());
+        result.passed = item.get("passed").and_then(|v| v.as_bool());
+        result.score_detail = item
+            .get("score_detail")
+            .and_then(|v| v.as_array())
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(|v| v.as_str().map(str::to_string))
+                    .collect()
+            })
+            .unwrap_or_default();
     }
 }
 

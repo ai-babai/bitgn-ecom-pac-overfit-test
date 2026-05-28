@@ -34,12 +34,18 @@ impl ArtifactWriter {
     }
 
     pub fn finish(&self, results: &[TaskResult]) -> Result<(), String> {
-        let passed = results.iter().filter(|r| r.passed).count();
+        let passed = results.iter().filter(|r| r.passed == Some(true)).count();
+        let failed = results
+            .iter()
+            .filter(|r| r.score_available && r.passed != Some(true))
+            .count();
+        let unscored = results.iter().filter(|r| !r.score_available).count();
         let wall_sum: f64 = results.iter().filter_map(|r| r.wall_seconds).sum();
         let payload = json!({
             "tasks_total": results.len(),
             "passed": passed,
-            "failed": results.len().saturating_sub(passed),
+            "failed": failed,
+            "unscored": unscored,
             "pass_rate": if results.is_empty() { 0.0 } else { passed as f64 / results.len() as f64 },
             "task_wall_time_sum_seconds": wall_sum,
             "results": results,
